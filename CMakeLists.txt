@@ -9,14 +9,10 @@ add_executable(${CMAKE_PROJECT_NAME}
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         include
-        ${glad_SOURCE_DIR}/include
-        third-party/stb_image
 )
 
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
-        glfw
-        glad
-#        glm::glm
+        glm::glm
 )
 if (WIN32)
     target_link_libraries(${CMAKE_PROJECT_NAME} opengl32)
@@ -31,21 +27,20 @@ add_dependencies(${CMAKE_PROJECT_NAME} copy_resources)
 #-------------------------------------------------------------------------
 # Dependencies
 # ------------------------------------------------------------------------
-add_subdirectory("third-party/glad")
-
 include(FetchContent)
+set(GLM_VERSION 1.0.1)
+
 #-------------------------------------------------------------------------
 # Fetch GLM
 # ------------------------------------------------------------------------
-#set(GLM_VERSION 1.0.1)
-#message(STATUS "include GLM")
-#FetchContent_Declare(
-#        libglm
-#        GIT_REPOSITORY https://github.com/g-truc/glm.git
-#        GIT_TAG ${GLM_VERSION}
-#        GIT_SHALLOW TRUE
-#        GIT_PROGRESS TRUE
-#)
-#
-#FetchContent_MakeAvailable(libglm)
+message(STATUS "include GLM")
+FetchContent_Declare(
+        libglm
+        GIT_REPOSITORY https://github.com/g-truc/glm.git
+        GIT_TAG ${GLM_VERSION}
+        GIT_SHALLOW TRUE
+        GIT_PROGRESS TRUE
+)
+
+FetchContent_MakeAvailable(libglm)
 
