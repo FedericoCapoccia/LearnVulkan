@@ -1,48 +1,35 @@
-cmake_minimum_required(VERSION 3.29)
+cmake_minimum_required(VERSION 3.8)
 project(Minecraft VERSION 1.0.0)
 
 set(CMAKE_CXX_STANDARD 23)
 
-add_executable(${CMAKE_PROJECT_NAME}
-        src/main.cpp
-        src/engine.cpp
-        src/engine.cpp
-)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/bin")
 
-target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-        include
-)
-
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
-        glm::glm
-)
-if (WIN32)
-    target_link_libraries(${CMAKE_PROJECT_NAME} opengl32)
-endif()
-
-target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -Wall -Wextra -fno-exceptions)
-target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE)
-
-add_custom_target(copy_resources COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_LIST_DIR}/resources ${CMAKE_CURRENT_BINARY_DIR}/resources)
-add_dependencies(${CMAKE_PROJECT_NAME} copy_resources)
+add_subdirectory(src)
+add_subdirectory(third_party)
 
 #-------------------------------------------------------------------------
-# Dependencies
+# Automatic shaders compiling
 # ------------------------------------------------------------------------
-include(FetchContent)
-set(GLM_VERSION 1.0.1)
+find_program(GLSL_VALIDATOR glslangValidator HINTS /usr/bin /usr/local/bin $ENV{VULKAN_SDK}/Bin/ $ENV{VULKAN_SDK}/Bin32/)
 
-#-------------------------------------------------------------------------
-# Fetch GLM
-# ------------------------------------------------------------------------
-message(STATUS "include GLM")
-FetchContent_Declare(
-        libglm
-        GIT_REPOSITORY https://github.com/g-truc/glm.git
-        GIT_TAG ${GLM_VERSION}
-        GIT_SHALLOW TRUE
-        GIT_PROGRESS TRUE
+file(GLOB_RECURSE GLSL_SOURCE_FILES
+        "${PROJECT_SOURCE_DIR}/resources/shaders/*.frag"
+        "${PROJECT_SOURCE_DIR}/resources/shaders/*.vert"
+        "${PROJECT_SOURCE_DIR}/resources/shaders/*.comp"
 )
 
-FetchContent_MakeAvailable(libglm)
+foreach(GLSL ${GLSL_SOURCE_FILES})
+    message(STATUS "BUILDING SHADER")
+    get_filename_component(FILE_NAME ${GLSL} NAME)
+    set(SPIRV "${PROJECT_SOURCE_DIR}/resources/shaders/${FILE_NAME}.spv")
+    message(STATUS ${GLSL})
+    ##execute glslang command to compile that specific shader
+    add_custom_command(
+            OUTPUT ${SPIRV}
+            COMMAND ${GLSL_VALIDATOR} -V ${GLSL} -o ${SPIRV}
+            DEPENDS ${GLSL})
+    list(APPEND SPIRV_BINARY_FILES ${SPIRV})
+endforeach(GLSL)
 
+add_custom_target(Shaders DEPENDS ${SPIRV_BINARY_FILES})
