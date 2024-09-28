@@ -4,6 +4,8 @@
 #include <vulkan/vulkan.hpp>
 
 constexpr bool enable_validation_layers = true;
+constexpr int32_t WIDTH = 1280;
+constexpr int32_t HEIGHT = 720;
 
 int main()
 {
@@ -11,7 +13,7 @@ int main()
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-    GLFWwindow* window = glfwCreateWindow(1280, 720, "Minecraft", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, "Minecraft", nullptr, nullptr);
 #pragma endregion
 
 #pragma region Vulkan
