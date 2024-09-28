@@ -1,11 +1,38 @@
-#include <iostream>
-#include <SDL3/SDL.h>
+#include <cassert>
+#include "window.hpp"
+
+void handle_keyboard_input(Minecraft::Window& window, const SDL_Event* event)
+{
+    assert(event->type == SDL_EVENT_KEY_DOWN); // Method called with wrong event type
+    if (event->key.scancode == SDL_SCANCODE_ESCAPE) { window.ShouldClose = true; }
+}
 
 int main() {
-    SDL_Init(SDL_INIT_VIDEO);
-    SDL_Window* window = SDL_CreateWindow("Minecraft", 1280, 720, SDL_WINDOW_VULKAN);
+    Minecraft::Window window { "Minecraft", 1280, 720 };
 
-    SDL_UpdateWindowSurface(window);
-    SDL_Delay(1000);
+    SDL_Event event;
+    while(!window.ShouldClose) {
+
+        window.UpdateSurface();
+
+        // Event Loop
+        while (SDL_PollEvent(&event) != 0) {
+            switch (event.type) {
+
+            case SDL_EVENT_QUIT:
+                window.ShouldClose = true;
+                break;
+
+            case SDL_EVENT_KEY_DOWN:
+                handle_keyboard_input(window, &event);
+                break;
+
+            default:
+                break;
+            }
+
+        }
+    }
+
     return 0;
 }
