@@ -1,5 +1,6 @@
 #include "gfx_manager.hpp"
 #include "window.hpp"
+#include "logger.hpp"
 
 bool m_Running = true;
 
@@ -9,15 +10,15 @@ int main()
 
     Minecraft::GfxManager gfx_manager;
     if (!gfx_manager.init()) {
-        std::cerr << "Failed to initialize graphic manager\n";
+        LOG_ERROR("Failed to initialize graphic manager");
         return EXIT_FAILURE;
     }
     (void)gfx_manager;
 
     while (m_Running) {
-        m_Running = !window.should_close();
         glfwPollEvents();
-        m_Running = false;
+        m_Running = !window.should_close();
+        m_Running = false; // TODO remove when starting to render so wayland opens the window
     }
 
     return EXIT_SUCCESS;

@@ -23,7 +23,7 @@
       "binaryDir": "${sourceDir}/build/release",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_C_FLAGS_RELEASE": "-D_NDEBUG"
+        "CMAKE_CXX_FLAGS_RELEASE": "-D_NDEBUG"
       }
     }
   ]

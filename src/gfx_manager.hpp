@@ -10,6 +10,7 @@ public:
 private:
   bool m_IsInitialized = false;
   vk::Instance m_Instance { nullptr };
+  vk::DispatchLoaderDynamic m_Dldi;
 };
 
 }

@@ -1,4 +1,6 @@
 #include "gfx_manager.hpp"
+
+#include "logger.hpp"
 #include "vk_utils.hpp"
 
 namespace Minecraft {
@@ -18,6 +20,9 @@ bool GfxManager::init()
     const std::vector extensions = VkUtils::get_extensions();
     const std::vector layers = VkUtils::get_layers();
 
+    Logger::log_available_extensions();
+    Logger::log_available_layers();
+
     const auto instance_create_info = vk::InstanceCreateInfo {
         vk::InstanceCreateFlags(),
         &app_info,
@@ -27,11 +32,12 @@ bool GfxManager::init()
 
     const auto [res, instance] = vk::createInstance(instance_create_info);
     if (res != vk::Result::eSuccess) {
-        std::cerr << "Unable to create instance\n";
+        LOG_ERROR("Unable to create instance");
         return false;
     }
 
     m_Instance = { instance };
+    m_Dldi = vk::DispatchLoaderDynamic(m_Instance, vkGetInstanceProcAddr);
 
     m_IsInitialized = true;
     return true;
@@ -40,8 +46,8 @@ bool GfxManager::init()
 
 GfxManager::~GfxManager()
 {
-    std::cout << "GfxManager destructor\n";
-    m_Instance.destroy();
+    LOG("GfxManager destructor");
+    m_Instance.destroy(nullptr, m_Dldi);
 }
 
 }

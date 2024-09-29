@@ -4,6 +4,7 @@
 include(FetchContent)
 set(GLM_VERSION 1.0.1)
 set(GLFW_VERSION 3.4)
+set(FMT_VERSION 11.0.2)
 
 #-------------------------------------------------------------------------
 # Fetch GLM
@@ -35,6 +36,19 @@ set(GLFW_BUILD_TESTS OFF)
 set(GLFW_BUILD_DOCS OFF)
 set(GLFW_BUILD_EXAMPLES OFF)
 FetchContent_MakeAvailable(glfw)
+
+#-------------------------------------------------------------------------
+# FMT
+# ------------------------------------------------------------------------
+message(STATUS "include FMT")
+FetchContent_Declare(
+        fmt
+        GIT_REPOSITORY https://github.com/fmtlib/fmt
+        GIT_TAG ${FMT_VERSION}
+        GIT_SHALLOW TRUE
+        GIT_PROGRESS TRUE
+)
+FetchContent_MakeAvailable(fmt)
 
 #-------------------------------------------------------------------------
 # Vulkan

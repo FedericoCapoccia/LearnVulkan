@@ -6,6 +6,11 @@
 #define VULKAN_HPP_NO_EXCEPTIONS
 #include <vulkan/vulkan.hpp>
 
+
+#include <fmt/format.h>
+#include <fmt/color.h>
+#include <fmt/ostream.h>
+
 #include <iostream>
 #include <vector>
 #include <cassert>
