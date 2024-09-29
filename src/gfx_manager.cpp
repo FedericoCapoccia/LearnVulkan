@@ -7,8 +7,12 @@ namespace Minecraft {
 
 bool GfxManager::init()
 {
-    assert(m_IsInitialized == false);
+    if (m_IsInitialized) {
+        LOG_ERROR("Graphics Manager already initialized.");
+        return false;
+    }
 
+#pragma region VkInstance
     constexpr auto app_info = vk::ApplicationInfo {
         "Minecraft",
         VK_MAKE_VERSION(1, 0, 0),
@@ -38,6 +42,7 @@ bool GfxManager::init()
 
     m_Instance = { instance };
     m_Dldi = vk::DispatchLoaderDynamic(m_Instance, vkGetInstanceProcAddr);
+#pragma endregion
 
     m_IsInitialized = true;
     return true;

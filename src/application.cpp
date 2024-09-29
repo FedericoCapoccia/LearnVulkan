@@ -10,7 +10,6 @@ int main()
 
     Minecraft::GfxManager gfx_manager;
     if (!gfx_manager.init()) {
-        LOG_ERROR("Failed to initialize graphic manager");
         return EXIT_FAILURE;
     }
     (void)gfx_manager;
