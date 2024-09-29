@@ -40,6 +40,7 @@ bool GfxManager::init()
 
 GfxManager::~GfxManager()
 {
+    std::cout << "GfxManager destructor\n";
     m_Instance.destroy();
 }
 

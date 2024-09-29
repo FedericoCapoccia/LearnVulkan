@@ -19,6 +19,7 @@ bool Window::should_close() const { return glfwWindowShouldClose(m_Window); }
 
 Window::~Window()
 {
+    std::cout << "Window destructor\n";
     glfwDestroyWindow(m_Window);
     glfwTerminate();
 }

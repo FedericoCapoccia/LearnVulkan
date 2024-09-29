@@ -1,6 +1,8 @@
 #include "gfx_manager.hpp"
 #include "window.hpp"
 
+bool m_Running = true;
+
 int main()
 {
     const Minecraft::Window window { 1280, 720 };
@@ -12,8 +14,10 @@ int main()
     }
     (void)gfx_manager;
 
-    while (!window.should_close()) {
+    while (m_Running) {
+        m_Running = !window.should_close();
         glfwPollEvents();
+        m_Running = false;
     }
 
     return EXIT_SUCCESS;
