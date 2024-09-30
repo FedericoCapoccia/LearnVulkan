@@ -13,18 +13,16 @@
 
 namespace Logger {
 
-inline void log_available_extensions()
+inline void log_available_extensions(const std::vector<vk::ExtensionProperties>& supported_extensions)
 {
-    std::vector<vk::ExtensionProperties> supported_extensions = vk::enumerateInstanceExtensionProperties().value;
     LOG("Available extensions:");
     for (const auto& extension : supported_extensions) {
         LOG("\t{}", static_cast<const char*>(extension.extensionName));
     }
 }
 
-inline void log_available_layers()
+inline void log_available_layers(const std::vector<vk::LayerProperties>& supported_layers)
 {
-    std::vector<vk::LayerProperties> supported_layers = vk::enumerateInstanceLayerProperties().value;
     LOG("Available layers:");
     for (const auto& supported_layer : supported_layers) {
         LOG("\t{}", static_cast<const char*>(supported_layer.layerName));

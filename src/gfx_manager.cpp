@@ -5,6 +5,47 @@
 
 namespace Minecraft {
 
+bool check_layers_extensions_support(
+    const std::vector<const char*>& extensions,
+    const std::vector<const char*>& layers)
+{
+    const std::vector<vk::ExtensionProperties> supported_extensions = vk::enumerateInstanceExtensionProperties().value;
+    Logger::log_available_extensions(supported_extensions);
+
+    for (const auto& extension : extensions) {
+        bool found = false;
+        for (const auto& supported_extension : supported_extensions) {
+            if (strcmp(extension, supported_extension.extensionName) == 0) {
+                found = true;
+                LOG("Extension: \"{}\" is supported", extension);
+            }
+        }
+        if (!found) {
+            LOG("Extension: \"{}\" is not supported", extension);
+            return false;
+        }
+    }
+
+    const std::vector<vk::LayerProperties> supported_layers = vk::enumerateInstanceLayerProperties().value;
+    Logger::log_available_layers(supported_layers);
+
+    for (const auto& layer : layers) {
+        bool found = false;
+        for (const auto& supported_layer : supported_layers) {
+            if (strcmp(layer, supported_layer.layerName) == 0) {
+                found = true;
+                LOG("Layer: \"{}\" is supported", layer);
+            }
+        }
+        if (!found) {
+            LOG("Layer: \"{}\" is not supported", layer);
+            return false;
+        }
+    }
+
+    return true;
+}
+
 bool GfxManager::init()
 {
     if (m_IsInitialized) {
@@ -25,9 +66,10 @@ bool GfxManager::init()
     const std::vector extensions = VkUtils::get_extensions();
     const std::vector layers = VkUtils::get_layers();
 
-    Logger::log_available_extensions();
-    Logger::log_available_layers();
-    // TODO check if layers and extensions are supported otherwise exit
+    if (!check_layers_extensions_support(extensions, layers)) {
+        LOG_ERROR("Device doesn't support required layers and extensions");
+        return false;
+    }
 
     const auto instance_create_info = vk::InstanceCreateInfo {
         vk::InstanceCreateFlags(),
@@ -51,7 +93,7 @@ bool GfxManager::init()
 
     if (VkUtils::enable_validation_layers) {
         const auto message_severity_flag_bits = vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning
-                | vk::DebugUtilsMessageSeverityFlagBitsEXT::eError;
+            | vk::DebugUtilsMessageSeverityFlagBitsEXT::eError;
 
         const auto message_type_flags = vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral
             | vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation
