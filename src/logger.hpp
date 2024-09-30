@@ -1,9 +1,11 @@
 #ifndef LOGGER_HPP
 #define LOGGER_HPP
 
+#pragma region LogMacros
+
 #ifdef _DEBUG
-    #define LOG(fmt_str, ...) \
-        fmt::print(fg(fmt::terminal_color::white), "" fmt_str "\n", ##__VA_ARGS__)
+#define LOG(fmt_str, ...) \
+    fmt::print(fg(fmt::terminal_color::white), "" fmt_str "\n", ##__VA_ARGS__)
 #else
 #define LOG(fmt_str, ...)
 #endif
@@ -11,7 +13,19 @@
 #define LOG_ERROR(fmt_str, ...) \
     fmt::print(std::cerr, "[ERROR]\t\t" fmt_str "\n", ##__VA_ARGS__)
 
+#pragma endregion
+
 namespace Logger {
+
+VKAPI_ATTR inline VkBool32 VKAPI_CALL debug_callback(
+    VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
+    VkDebugUtilsMessageTypeFlagsEXT message_type,
+    const VkDebugUtilsMessengerCallbackDataEXT* p_callback_data,
+    void* p_user_data)
+{
+    LOG_ERROR("{}", p_callback_data->pMessage);
+    return VK_FALSE;
+}
 
 inline void log_available_extensions(const std::vector<vk::ExtensionProperties>& supported_extensions)
 {
@@ -28,17 +42,6 @@ inline void log_available_layers(const std::vector<vk::LayerProperties>& support
         LOG("\t{}", static_cast<const char*>(supported_layer.layerName));
     }
 }
-
-VKAPI_ATTR inline VkBool32 VKAPI_CALL debug_callback(
-    VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
-    VkDebugUtilsMessageTypeFlagsEXT message_type,
-    const VkDebugUtilsMessengerCallbackDataEXT* p_callback_data,
-    void* p_user_data)
-{
-    LOG_ERROR("{}", p_callback_data->pMessage);
-    return VK_FALSE;
-}
-
 
 }
 
