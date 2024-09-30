@@ -31,6 +31,17 @@ inline void log_available_layers()
     }
 }
 
+VKAPI_ATTR inline VkBool32 VKAPI_CALL debug_callback(
+    VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
+    VkDebugUtilsMessageTypeFlagsEXT message_type,
+    const VkDebugUtilsMessengerCallbackDataEXT* p_callback_data,
+    void* p_user_data)
+{
+    LOG_ERROR("{}", p_callback_data->pMessage);
+    return VK_FALSE;
+}
+
+
 }
 
 #endif
