@@ -5,7 +5,7 @@
 
 #ifdef _DEBUG
 #define LOG(fmt_str, ...) \
-    fmt::print(fg(fmt::terminal_color::white), "" fmt_str "\n", ##__VA_ARGS__)
+    fmt::print("" fmt_str "\n", ##__VA_ARGS__)
 #else
 #define LOG(fmt_str, ...)
 #endif
