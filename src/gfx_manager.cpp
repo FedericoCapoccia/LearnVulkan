@@ -1,9 +1,10 @@
 #include "gfx_manager.hpp"
 
 #include "logger.hpp"
-#include "vk_utils.hpp"
 
 namespace Minecraft {
+
+constexpr bool enable_validation_layers = true;
 
 bool GfxManager::init()
 {
@@ -14,13 +15,14 @@ bool GfxManager::init()
 
     vkb::InstanceBuilder builder;
 
-    auto inst_ret = builder.set_app_name("Minecraft")
-                        .request_validation_layers()
-                        .set_debug_callback(Logger::debug_callback)
-                        .require_api_version(1, 3, 0)
-                        .build();
+    auto instance_builder = builder.set_app_name("Minecraft").require_api_version(1, 3, 0);
 
-    const vkb::Instance vkb_inst = inst_ret.value();
+    if (enable_validation_layers) {
+        instance_builder.request_validation_layers()
+            .set_debug_callback(Logger::debug_callback);
+    }
+
+    const vkb::Instance vkb_inst = instance_builder.build().value();
     m_Instance = vkb_inst.instance;
     m_DebugMessenger = vkb_inst.debug_messenger;
 
@@ -31,7 +33,7 @@ bool GfxManager::init()
 GfxManager::~GfxManager()
 {
     LOG("GfxManager destructor");
-    if (VkUtils::enable_validation_layers) {
+    if (enable_validation_layers) {
         vkb::destroy_debug_utils_messenger(m_Instance, m_DebugMessenger);
     }
     m_Instance.destroy();

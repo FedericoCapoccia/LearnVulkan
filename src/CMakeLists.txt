@@ -1,7 +1,6 @@
 add_executable(${CMAKE_PROJECT_NAME}
         application.cpp
         gfx_manager.cpp
-        vk_utils.cpp
         window.cpp
 )
 
