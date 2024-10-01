@@ -6,6 +6,8 @@
 #define VULKAN_HPP_NO_EXCEPTIONS
 #include <vulkan/vulkan.hpp>
 
+#include <VkBootstrap.h>
+
 
 #include <fmt/format.h>
 #include <fmt/color.h>

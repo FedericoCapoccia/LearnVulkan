@@ -11,9 +11,11 @@ private:
   bool m_IsInitialized = false;
   vk::Instance m_Instance { nullptr };
   vk::DebugUtilsMessengerEXT m_DebugMessenger { nullptr };
-  vk::DispatchLoaderDynamic m_Dldi;
+  //vk::DispatchLoaderDynamic m_Dldi;
+  //vk::SurfaceKHR m_Surface;
 
-  vk::PhysicalDevice m_PhysicalDevice { nullptr };
+  //vk::PhysicalDevice m_PhysicalDevice { nullptr };
+  //vk::Device m_Device { nullptr };
 };
 
 }
