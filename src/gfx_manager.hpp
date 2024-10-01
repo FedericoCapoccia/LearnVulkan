@@ -12,6 +12,8 @@ private:
   vk::Instance m_Instance { nullptr };
   vk::DebugUtilsMessengerEXT m_DebugMessenger { nullptr };
   vk::DispatchLoaderDynamic m_Dldi;
+
+  vk::PhysicalDevice m_PhysicalDevice { nullptr };
 };
 
 }

@@ -43,6 +43,27 @@ inline void log_available_layers(const std::vector<vk::LayerProperties>& support
     }
 }
 
+inline void log_device_properties(const vk::PhysicalDevice& device)
+{
+    vk::PhysicalDeviceProperties properties = device.getProperties();
+    std::string device_type = [&]() {
+        switch (properties.deviceType) {
+        case vk::PhysicalDeviceType::eCpu:
+            return "CPU";
+        case vk::PhysicalDeviceType::eDiscreteGpu:
+            return "Discrete GPU";
+        case (vk::PhysicalDeviceType::eIntegratedGpu):
+            return "Integrated GPU";
+        case (vk::PhysicalDeviceType::eVirtualGpu):
+            return "Virtual GPU";
+        default:
+            return "Other";
+        }
+    }();
+
+    LOG("Device: {} [{}]", static_cast<const char*>(properties.deviceName), device_type);
+}
+
 }
 
 #endif

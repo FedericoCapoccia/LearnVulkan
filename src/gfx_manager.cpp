@@ -46,6 +46,33 @@ bool check_layers_extensions_support(
     return true;
 }
 
+bool is_device_suitable(const vk::PhysicalDevice& device)
+{
+
+    LOG("Required extension:");
+    for (const auto& extension : VkUtils::requested_device_extensions) {
+        LOG("\t{}", extension);
+    }
+
+    std::set<std::string> required_extensions(
+        VkUtils::requested_device_extensions.begin(),
+        VkUtils::requested_device_extensions.end());
+
+    LOG("Device can support the following extensions:");
+    for (const auto& extension : device.enumerateDeviceExtensionProperties().value) {
+        LOG("\t{}", static_cast<const char*>(extension.extensionName));
+        required_extensions.erase(extension.extensionName);
+    }
+
+    if (!required_extensions.empty()) {
+        LOG("Device cannot support required extensions");
+        return false;
+    }
+
+    LOG("Device can support required extensions");
+    return true;
+}
+
 bool GfxManager::init()
 {
     if (m_IsInitialized) {
@@ -108,15 +135,39 @@ bool GfxManager::init()
             nullptr // user defined data to pass into the callback
         );
 
-        const auto [result, debug_messenger]
+        const auto [res, debug_messenger]
             = instance.createDebugUtilsMessengerEXT(create_info, nullptr, m_Dldi);
 
-        if (result != vk::Result::eSuccess) {
+        if (res != vk::Result::eSuccess) {
             LOG_ERROR("Unable to create debug messenger");
             return false;
         }
 
         m_DebugMessenger = debug_messenger;
+    }
+
+#pragma endregion
+
+#pragma region VkDevice
+
+    const std::vector<vk::PhysicalDevice> physical_devices = m_Instance.enumeratePhysicalDevices().value;
+
+    if (physical_devices.empty()) {
+        LOG_ERROR("No physical devices detected");
+        return false;
+    }
+
+    for (const auto& device : physical_devices) {
+        Logger::log_device_properties(device);
+        if (is_device_suitable(device)) {
+            m_PhysicalDevice = device;
+            break;
+        }
+    }
+
+    if (m_PhysicalDevice == nullptr) {
+        LOG_ERROR("No suitable devices found");
+        return false;
     }
 
 #pragma endregion
