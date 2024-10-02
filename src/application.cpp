@@ -1,5 +1,4 @@
 #include "engine.hpp"
-#include "logger.hpp"
 
 
 int main()
@@ -9,13 +8,9 @@ int main()
         return EXIT_FAILURE;
     }
 
-    (void)engine;
-
-    //while (engine.is_running()) {
-    //    glfwPollEvents();
-    //    m_Running = !window.should_close();
-    //    m_Running = false; // TODO remove when starting to render so wayland opens the window
-    //}
+    if (!engine.run()) {
+        return EXIT_FAILURE;
+    }
 
     return EXIT_SUCCESS;
 }

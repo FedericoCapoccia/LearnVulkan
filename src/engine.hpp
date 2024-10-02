@@ -1,38 +1,36 @@
 #ifndef ENGINE_HPP
 #define ENGINE_HPP
 
-#include "logger.hpp"
-
 namespace Minecraft {
 
-struct WindowBundle {
-    GLFWwindow* GlfwWindow;
-    int32_t Width;
-    int32_t Height;
+constexpr uint32_t FRAME_OVERLAP = 2;
+struct FrameData {
+    vk::CommandPool CommandPool;
+    vk::CommandBuffer CommandBuffer;
+    vk::Semaphore SwapchainSemaphore, RenderSemaphore;
+    vk::Fence RenderFence;
 };
 
 class Engine {
 public:
-    WindowBundle Window {};
-    bool init();
-    Engine(int32_t width, int32_t height);
+    Engine(const uint32_t width, const uint32_t height)
+        : m_WindowExtent(width, height)
+    {
+    }
     ~Engine();
 
-    [[nodiscard]] bool is_running() const { return m_Running; }
-    void start()
-    {
-        LOG("Engine started");
-        m_Running = true;
-    }
-    void stop()
-    {
-        LOG("Engine stopped");
-        m_Running = false;
-    }
+    bool init();
+    bool run();
+
+    FrameData& get_current_frame() { return m_Frames[m_FrameNumber % FRAME_OVERLAP]; }
 
 private:
     bool m_IsInitialized = false;
+    int m_FrameNumber { 0 };
     bool m_Running = false;
+
+    GLFWwindow* m_Window { nullptr };
+    vk::Extent2D m_WindowExtent;
 
     vk::Instance m_Instance { nullptr };
     vk::DebugUtilsMessengerEXT m_DebugMessenger { nullptr };
@@ -47,10 +45,18 @@ private:
     std::vector<VkImageView> m_SwapchainImageViews;
     vk::Extent2D m_SwapchainExtent {};
 
-    void init_window();
-    void init_context();
-    void create_swapchain(int32_t width, int32_t height);
+    std::array<FrameData, FRAME_OVERLAP> m_Frames;
+    vk::Queue m_GraphicsQueue;
+    uint32_t m_GraphicsQueueFamily;
+
+    bool init_window();
+    void init_vulkan();
+    void create_swapchain(uint32_t width, uint32_t height);
     void destroy_swapchain();
+    bool init_commands();
+    bool init_sync_structures();
+
+    bool draw();
 };
 
 }

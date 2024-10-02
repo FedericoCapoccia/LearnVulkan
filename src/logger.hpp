@@ -15,6 +15,15 @@
 
 #pragma endregion
 
+#define VK_CHECK(x) \
+    do { \
+        vk::Result res = x;\
+        if (res != vk::Result::eSuccess) { \
+            LOG_ERROR("Vulkan error: {}", vk::to_string(res)); \
+            return false; \
+        } \
+    } while (0)
+
 namespace Logger {
 
 VKAPI_ATTR inline VkBool32 VKAPI_CALL debug_callback(
