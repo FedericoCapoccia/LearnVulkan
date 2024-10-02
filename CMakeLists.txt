@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(Minecraft VERSION 1.0.0)
+project(LearnVulkan VERSION 1.0.0)
 
 set(CMAKE_CXX_STANDARD 23)
 
