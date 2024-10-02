@@ -1,7 +1,7 @@
 add_executable(${CMAKE_PROJECT_NAME}
         application.cpp
-        gfx_manager.cpp
-        window.cpp
+        engine.cpp
+        engine.hpp
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR} ${Vulkan_INCLUDE_DIR}")
