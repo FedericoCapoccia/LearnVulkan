@@ -76,7 +76,6 @@ void Engine::init_vulkan()
     vkb::PhysicalDevice vkb_physical_device = selector
                                                   .set_minimum_version(1, 3)
                                                   .set_surface(m_Surface)
-                                                  .require_present()
                                                   .select()
                                                   .value();
 
