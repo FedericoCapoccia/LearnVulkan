@@ -72,19 +72,9 @@ void Engine::init_vulkan()
     glfwCreateWindowSurface(m_Instance, m_Window, nullptr, &c_surface);
     m_Surface = c_surface;
 
-    vk::PhysicalDeviceVulkan13Features features;
-    features.dynamicRendering = true;
-    features.synchronization2 = true;
-
-    vk::PhysicalDeviceVulkan12Features features12;
-    features12.bufferDeviceAddress = true;
-    features12.descriptorIndexing = true;
-
     vkb::PhysicalDeviceSelector selector { vkb_inst };
     vkb::PhysicalDevice vkb_physical_device = selector
                                                   .set_minimum_version(1, 3)
-                                                  .set_required_features_13(features)
-                                                  .set_required_features_12(features12)
                                                   .set_surface(m_Surface)
                                                   .select()
                                                   .value();
