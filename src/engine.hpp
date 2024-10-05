@@ -3,14 +3,6 @@
 
 namespace Minecraft {
 
-constexpr uint32_t FRAME_OVERLAP = 2;
-struct FrameData {
-    vk::CommandPool CommandPool;
-    vk::CommandBuffer CommandBuffer;
-    vk::Semaphore SwapchainSemaphore, RenderSemaphore;
-    vk::Fence RenderFence;
-};
-
 class Engine {
 public:
     Engine(const uint32_t width, const uint32_t height)
@@ -21,8 +13,6 @@ public:
 
     bool init();
     bool run();
-
-    FrameData& get_current_frame() { return m_Frames[m_FrameNumber % FRAME_OVERLAP]; }
 
 private:
     bool m_IsInitialized = false;
@@ -45,18 +35,13 @@ private:
     std::vector<VkImageView> m_SwapchainImageViews;
     vk::Extent2D m_SwapchainExtent {};
 
-    std::array<FrameData, FRAME_OVERLAP> m_Frames;
     vk::Queue m_GraphicsQueue;
-    uint32_t m_GraphicsQueueFamily;
+    uint32_t m_GraphicsQueueFamily {};
 
     bool init_window();
     void init_vulkan();
     void create_swapchain(uint32_t width, uint32_t height);
     void destroy_swapchain();
-    bool init_commands();
-    bool init_sync_structures();
-
-    bool draw();
 };
 
 }
