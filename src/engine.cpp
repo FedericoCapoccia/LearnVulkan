@@ -76,6 +76,7 @@ void Engine::init_vulkan()
     vkb::PhysicalDevice vkb_physical_device = selector
                                                   .set_minimum_version(1, 3)
                                                   .set_surface(m_Surface)
+                                                  .require_present()
                                                   .select()
                                                   .value();
 
@@ -100,13 +101,16 @@ void Engine::create_swapchain(const uint32_t width, const uint32_t height)
 
     const auto surface_format = vk::SurfaceFormatKHR { m_SwapchainImageFormat, vk::ColorSpaceKHR::eSrgbNonlinear };
     constexpr auto present_mode = static_cast<VkPresentModeKHR>(vk::PresentModeKHR::eFifo);
-    constexpr auto image_usage_flags = static_cast<VkImageUsageFlags>(vk::ImageUsageFlagBits::eTransferDst);
+    constexpr auto image_usage_flags = static_cast<VkImageUsageFlags>(vk::ImageUsageFlagBits::eColorAttachment);
+    constexpr auto composite_alpha_flags = static_cast<VkCompositeAlphaFlagBitsKHR>(vk::CompositeAlphaFlagBitsKHR::eOpaque);
 
     vkb::Swapchain vkb_swapchain = swapchain_builder
                                        .set_desired_format(surface_format)
                                        .set_desired_present_mode(present_mode)
+                                       .set_clipped()
                                        .set_desired_extent(width, height)
                                        .add_image_usage_flags(image_usage_flags)
+                                       .set_composite_alpha_flags(composite_alpha_flags)
                                        .build()
                                        .value();
 
@@ -124,7 +128,6 @@ void Engine::destroy_swapchain()
         m_Device.destroyImageView(image_view);
     }
 }
-
 
 bool Engine::run()
 {
