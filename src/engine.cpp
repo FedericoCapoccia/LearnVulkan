@@ -1,5 +1,6 @@
 #include "engine.hpp"
 #include "logger.hpp"
+#include "gpu_manager.hpp"
 
 #define VMA_IMPLEMENTATION
 #include <vk_mem_alloc.h>

@@ -1,24 +1,10 @@
 #pragma once
 
+#include "gpu_manager.hpp"
+
 #include <vk_mem_alloc.h>
 
 namespace Minecraft {
-
-struct DeletionQueue {
-    std::deque<std::function<void()>> Deletors;
-
-    void push_function(std::function<void()>&& function) {
-        Deletors.push_back(function);
-    }
-
-    void flush() {
-        // reverse iterate the deletion queue to execute all the functions
-        for (auto & Deletor : std::ranges::reverse_view(Deletors)) {
-            Deletor(); //call functors
-        }
-        Deletors.clear();
-    }
-};
 
 struct FrameData {
     vk::CommandPool CommandPool { nullptr };
@@ -62,6 +48,13 @@ const std::vector<Vertex> vertices = {
     { { 0.5f, 0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
     { { -0.5f, 0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f } }
 };
+
+// TODO Abstractions
+/*
+ * Application -> main loop and window, makes drawcall on engine
+ * Engine ->
+ * VulkanContext -> m_Device, m_Swapchain
+ */
 
 class Engine {
 public:
