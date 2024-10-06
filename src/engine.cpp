@@ -1,6 +1,9 @@
 #include "engine.hpp"
 #include "logger.hpp"
 
+#define VMA_IMPLEMENTATION
+#include <vk_mem_alloc.h>
+
 namespace Minecraft {
 
 constexpr bool enable_validation_layers = true;
@@ -33,6 +36,11 @@ bool Engine::init(const uint32_t width, const uint32_t height)
         return false;
     }
 
+    if (!create_vertex_buffer()) {
+        LOG_ERROR("Failed to create vertex buffer");
+        return false;
+    }
+
     if (!init_commands()) {
         LOG_ERROR("Failed to initialize command structures");
         return false;
@@ -50,7 +58,7 @@ bool Engine::init(const uint32_t width, const uint32_t height)
 static void framebuffer_resize_callback(GLFWwindow* window, int width, int height)
 {
     const auto engine = static_cast<Engine*>(glfwGetWindowUserPointer(window));
-    engine -> m_FramebufferResized = true;
+    engine->m_FramebufferResized = true;
 }
 
 bool Engine::init_window(const uint32_t width, const uint32_t height)
@@ -81,7 +89,9 @@ void Engine::init_vulkan()
 
     vkb::InstanceBuilder builder;
 
-    auto instance_builder = builder.set_app_name("Minecraft").require_api_version(1, 3, 0);
+    auto instance_builder = builder.set_app_name("Minecraft")
+                                .require_api_version(1, 3, 0)
+                                .enable_layer("VK_LAYER_MANGOHUD_overlay_x86_64");
 
     if (enable_validation_layers) {
         instance_builder.request_validation_layers()
@@ -93,7 +103,7 @@ void Engine::init_vulkan()
     m_DebugMessenger = vkb_inst.debug_messenger;
 
     // Logger::log_available_extensions(vk::enumerateInstanceExtensionProperties().value);
-    // Logger::log_available_layers(vk::enumerateInstanceLayerProperties().value);
+    Logger::log_available_layers(vk::enumerateInstanceLayerProperties().value);
 
 #pragma endregion
 
@@ -123,6 +133,22 @@ void Engine::init_vulkan()
     m_PresentQueue = vkb_device.get_queue(vkb::QueueType::present).value();
     m_GraphicsQueue = vkb_device.get_queue(vkb::QueueType::graphics).value();
     m_GraphicsQueueFamily = vkb_device.get_queue_index(vkb::QueueType::graphics).value();
+
+#define VMA_VULKAN_VERSION 1003000
+
+    VmaVulkanFunctions vulkanFunctions = {};
+    vulkanFunctions.vkGetInstanceProcAddr = &vkGetInstanceProcAddr;
+    vulkanFunctions.vkGetDeviceProcAddr = &vkGetDeviceProcAddr;
+
+    VmaAllocatorCreateInfo allocator_create_info = {};
+    allocator_create_info.flags = VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
+    allocator_create_info.vulkanApiVersion = VK_API_VERSION_1_3;
+    allocator_create_info.physicalDevice = m_PhysicalDevice;
+    allocator_create_info.device = m_Device;
+    allocator_create_info.instance = m_Instance;
+    allocator_create_info.pVulkanFunctions = &vulkanFunctions;
+
+    vmaCreateAllocator(&allocator_create_info, &m_Allocator);
 }
 
 void Engine::create_swapchain()
@@ -291,9 +317,13 @@ bool Engine::create_graphics_pipeline()
         vert_shader_stage_info, frag_shader_stage_info
     };
 
-    constexpr auto vertex_input_info = vk::PipelineVertexInputStateCreateInfo({},
-        0, nullptr,
-        0, nullptr);
+    const auto binding_description = Vertex::get_binding_description();
+    const auto attribute_descriptions = Vertex::get_attribute_descriptions();
+
+    const auto vertex_input_info = vk::PipelineVertexInputStateCreateInfo({},
+        1, &binding_description,
+        attribute_descriptions.size(), attribute_descriptions.data());
+
 #pragma endregion
 
 #pragma region Pipeline
@@ -437,6 +467,40 @@ bool Engine::init_commands()
     return true;
 }
 
+bool Engine::create_vertex_buffer()
+{
+    VkBufferCreateInfo buffer_info = {};
+    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer_info.size = sizeof(vertices[0]) * vertices.size();
+    buffer_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VmaAllocationCreateInfo alloc_info {};
+    alloc_info.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+
+    VkBuffer buffer;
+    VmaAllocation allocation;
+
+    if (const VkResult result = vmaCreateBuffer(m_Allocator, &buffer_info, &alloc_info, &buffer, &allocation, nullptr); result != VK_SUCCESS) {
+        LOG_ERROR("Vertex buffer allocation failed");
+        return false;
+    }
+
+    m_VertexBuffer = {
+        .Handle = buffer,
+        .Allocation = allocation
+    };
+
+    void* data;
+    vmaMapMemory(m_Allocator, m_VertexBuffer.Allocation, &data);
+
+    memcpy(data, vertices.data(), vertices.size() * sizeof(Vertex));
+
+    vmaUnmapMemory(m_Allocator, m_VertexBuffer.Allocation);
+
+    return true;
+}
+
 bool Engine::create_sync_objects()
 {
     constexpr vk::SemaphoreCreateInfo semaphore_create_info {};
@@ -472,6 +536,12 @@ bool Engine::record_command_buffer(const vk::CommandBuffer& cmd, const uint32_t 
     cmd.beginRenderPass(render_pass_info, vk::SubpassContents::eInline);
     cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, m_Pipeline);
 
+    const vk::Buffer vertexBuffers[] = { m_VertexBuffer.Handle };
+    // ReSharper disable once CppRedundantZeroInitializerInAggregateInitialization
+    constexpr vk::DeviceSize offsets[] = { 0 };
+
+    cmd.bindVertexBuffers(0, 1, vertexBuffers, offsets);
+
     // Scissor and viewport are bound here because are marked as dynamic on pipeline creation
     cmd.setScissor(0, 1, &scissor);
 
@@ -481,7 +551,7 @@ bool Engine::record_command_buffer(const vk::CommandBuffer& cmd, const uint32_t 
         0.0f, 1.0f);
     cmd.setViewport(0, 1, &viewport);
 
-    cmd.draw(3, 1, 0, 0);
+    cmd.draw(vertices.size(), 1, 0, 0);
 
     cmd.endRenderPass();
 
@@ -568,6 +638,7 @@ bool Engine::run()
         }
 
         m_Running = !glfwWindowShouldClose(m_Window);
+        // m_Running = false;
     }
     VK_CHECK(m_Device.waitIdle());
     LOG("Engine stopped");
@@ -576,11 +647,11 @@ bool Engine::run()
 
 Engine::~Engine()
 {
-    LOG("GfxManager destructor");
-
     if (m_SwapChain) {
         cleanup_swapchain();
     }
+
+    vmaDestroyBuffer(m_Allocator, m_VertexBuffer.Handle, m_VertexBuffer.Allocation);
 
     // Graphics pipeline
     if (m_Pipeline) {
@@ -604,6 +675,8 @@ Engine::~Engine()
         }
     }
 
+    vmaDestroyAllocator(m_Allocator);
+
     if (m_Device) {
         m_Device.destroy();
     }
@@ -618,7 +691,6 @@ Engine::~Engine()
         m_Instance.destroy();
     }
 
-    LOG("Window destructor");
     glfwDestroyWindow(m_Window);
     glfwTerminate();
 }

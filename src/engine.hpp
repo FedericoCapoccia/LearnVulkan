@@ -1,6 +1,8 @@
 #ifndef ENGINE_HPP
 #define ENGINE_HPP
 
+#include <vk_mem_alloc.h>
+
 namespace Minecraft {
 
 struct FrameData {
@@ -9,6 +11,40 @@ struct FrameData {
     vk::Semaphore SwapChainSemaphore { nullptr };
     vk::Semaphore RenderSemaphore { nullptr };
     vk::Fence RenderFence { nullptr };
+};
+
+struct Buffer {
+    vk::Buffer Handle { nullptr };
+    VmaAllocation Allocation;
+};
+
+struct Vertex {
+    glm::vec3 pos;
+    glm::vec3 color;
+
+    static vk::VertexInputBindingDescription get_binding_description()
+    {
+        return vk::VertexInputBindingDescription {
+            0, sizeof(Vertex), vk::VertexInputRate::eVertex
+        };
+    }
+
+    static std::array<vk::VertexInputAttributeDescription, 2> get_attribute_descriptions()
+    {
+        return {
+            vk::VertexInputAttributeDescription {
+                0, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, pos) },
+
+            vk::VertexInputAttributeDescription {
+                1, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, color) }
+        };
+    }
+};
+
+const std::vector<Vertex> vertices = {
+    { { 0.0f, -0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
+    { { 0.5f, 0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
+    { { -0.5f, 0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f } }
 };
 
 class Engine {
@@ -30,6 +66,7 @@ private:
 
     GLFWwindow* m_Window { nullptr };
 
+    VmaAllocator m_Allocator {};
     vk::Instance m_Instance { nullptr };
     vk::DebugUtilsMessengerEXT m_DebugMessenger { nullptr };
     vk::SurfaceKHR m_Surface;
@@ -55,6 +92,8 @@ private:
 
     std::array<FrameData, MAX_FRAMES_IN_FLIGHT> m_Frames;
 
+    Buffer m_VertexBuffer {};
+
     [[nodiscard]] bool init_window(uint32_t width, uint32_t height);
     void init_vulkan();
     void create_swapchain();
@@ -64,7 +103,7 @@ private:
     [[nodiscard]] bool create_graphics_pipeline();
     [[nodiscard]] bool create_framebuffers();
     [[nodiscard]] bool init_commands();
-    [[nodiscard]] bool allocate_command_buffer();
+    [[nodiscard]] bool create_vertex_buffer();
     [[nodiscard]] bool record_command_buffer(const vk::CommandBuffer& cmd, uint32_t image_index) const;
     [[nodiscard]] bool create_sync_objects();
 

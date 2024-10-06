@@ -8,6 +8,7 @@
 
 #include <VkBootstrap.h>
 
+#include <glm/glm.hpp>
 
 #include <fmt/format.h>
 #include <fmt/color.h>

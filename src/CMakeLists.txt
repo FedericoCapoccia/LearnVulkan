@@ -11,7 +11,9 @@ target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
         ${Vulkan_LIBRARY}
         glfw
         fmt
-        vk-bootstrap)
+        vk-bootstrap
+        GPUOpen::VulkanMemoryAllocator
+)
 
 target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE)
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE)

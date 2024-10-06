@@ -6,6 +6,7 @@ set(GLM_VERSION 1.0.1)
 set(GLFW_VERSION 3.4)
 set(FMT_VERSION 11.0.2)
 set(VK_BOOTSTRAP_VERSION 1.3.295)
+set(VMA_VERSION 3.1.0)
 
 #-------------------------------------------------------------------------
 # Fetch GLM
@@ -67,3 +68,10 @@ FetchContent_MakeAvailable(fetch_vk_bootstrap)
 #-------------------------------------------------------------------------
 message(STATUS "Retrieving Vulkan")
 find_package(Vulkan REQUIRED)
+
+FetchContent_Declare(
+        VulkanMemoryAllocator
+        GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+        GIT_TAG v${VMA_VERSION}
+)
+FetchContent_MakeAvailable(VulkanMemoryAllocator)
