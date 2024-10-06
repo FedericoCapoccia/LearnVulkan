@@ -21,6 +21,7 @@ file(GLOB_RECURSE GLSL_SOURCE_FILES
 
 foreach(GLSL ${GLSL_SOURCE_FILES})
     message(STATUS "BUILDING SHADER")
+    #message(STATUS "${CMAKE_PROJECT_SOURCE_DIR}/resources/shaders/${FILE_NAME}.spv")
     get_filename_component(FILE_NAME ${GLSL} NAME)
     set(SPIRV "${PROJECT_SOURCE_DIR}/resources/shaders/${FILE_NAME}.spv")
     message(STATUS ${GLSL})
