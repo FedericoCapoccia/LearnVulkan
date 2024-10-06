@@ -15,6 +15,9 @@
 #include <fmt/ostream.h>
 
 #include <iostream>
+#include <deque>
+#include <functional>
+#include <ranges>
 #include <vector>
 #include <cassert>
 #include <set>

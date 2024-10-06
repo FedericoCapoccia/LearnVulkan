@@ -1,9 +1,24 @@
-#ifndef ENGINE_HPP
-#define ENGINE_HPP
+#pragma once
 
 #include <vk_mem_alloc.h>
 
 namespace Minecraft {
+
+struct DeletionQueue {
+    std::deque<std::function<void()>> Deletors;
+
+    void push_function(std::function<void()>&& function) {
+        Deletors.push_back(function);
+    }
+
+    void flush() {
+        // reverse iterate the deletion queue to execute all the functions
+        for (auto & Deletor : std::ranges::reverse_view(Deletors)) {
+            Deletor(); //call functors
+        }
+        Deletors.clear();
+    }
+};
 
 struct FrameData {
     vk::CommandPool CommandPool { nullptr };
@@ -11,6 +26,7 @@ struct FrameData {
     vk::Semaphore SwapChainSemaphore { nullptr };
     vk::Semaphore RenderSemaphore { nullptr };
     vk::Fence RenderFence { nullptr };
+    DeletionQueue FrameDeletionQueue;
 };
 
 struct Buffer {
@@ -58,6 +74,8 @@ public:
 private:
     bool m_IsInitialized = false;
     bool m_Running = false;
+
+    DeletionQueue m_MainDeletionQueue;
 
     int m_FrameNumber { 0 };
     static constexpr int MAX_FRAMES_IN_FLIGHT = 2;
@@ -111,5 +129,3 @@ private:
 };
 
 }
-
-#endif

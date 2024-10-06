@@ -90,20 +90,28 @@ void Engine::init_vulkan()
     vkb::InstanceBuilder builder;
 
     auto instance_builder = builder.set_app_name("Minecraft")
-                                .require_api_version(1, 3, 0)
-                                .enable_layer("VK_LAYER_MANGOHUD_overlay_x86_64");
+                                .require_api_version(1, 3, 0);
 
     if (enable_validation_layers) {
-        instance_builder.request_validation_layers()
-            .set_debug_callback(Logger::debug_callback);
+        instance_builder.request_validation_layers().set_debug_callback(Logger::debug_callback);
     }
 
     const vkb::Instance vkb_inst = instance_builder.build().value();
+
     m_Instance = vkb_inst.instance;
-    m_DebugMessenger = vkb_inst.debug_messenger;
+    m_MainDeletionQueue.push_function([&] {
+        m_Instance.destroy();
+    });
+
+    if (enable_validation_layers) {
+        m_DebugMessenger = vkb_inst.debug_messenger;
+        m_MainDeletionQueue.push_function([&] {
+            vkb::destroy_debug_utils_messenger(m_Instance, m_DebugMessenger);
+        });
+    }
 
     // Logger::log_available_extensions(vk::enumerateInstanceExtensionProperties().value);
-    Logger::log_available_layers(vk::enumerateInstanceLayerProperties().value);
+    // Logger::log_available_layers(vk::enumerateInstanceLayerProperties().value);
 
 #pragma endregion
 
@@ -112,6 +120,10 @@ void Engine::init_vulkan()
     VkSurfaceKHR c_surface;
     glfwCreateWindowSurface(m_Instance, m_Window, nullptr, &c_surface);
     m_Surface = c_surface;
+
+    m_MainDeletionQueue.push_function([&] {
+        m_Instance.destroySurfaceKHR(m_Surface);
+    });
 
     vkb::PhysicalDeviceSelector selector { vkb_inst };
     vkb::PhysicalDevice vkb_physical_device = selector
@@ -125,6 +137,10 @@ void Engine::init_vulkan()
 
     m_PhysicalDevice = vkb_physical_device.physical_device;
     m_Device = vkb_device.device;
+
+    m_MainDeletionQueue.push_function([&] {
+        m_Device.destroy();
+    });
 
     Logger::log_device_properties(m_PhysicalDevice);
 
@@ -149,6 +165,9 @@ void Engine::init_vulkan()
     allocator_create_info.pVulkanFunctions = &vulkanFunctions;
 
     vmaCreateAllocator(&allocator_create_info, &m_Allocator);
+    m_MainDeletionQueue.push_function([&] {
+        vmaDestroyAllocator(m_Allocator);
+    });
 }
 
 void Engine::create_swapchain()
@@ -257,6 +276,11 @@ bool Engine::create_render_pass()
     VK_CHECK(result);
 
     m_RenderPass = renderpass;
+
+    m_MainDeletionQueue.push_function([&] {
+        m_Device.destroyRenderPass(m_RenderPass);
+    });
+
     return true;
 }
 
@@ -395,6 +419,10 @@ bool Engine::create_graphics_pipeline()
     VK_CHECK(pipeline_layout_res);
     m_PipelineLayout = pipeline_layout;
 
+    m_MainDeletionQueue.push_function([&] {
+        m_Device.destroyPipelineLayout(m_PipelineLayout);
+    });
+
     const auto pipeline_info = vk::GraphicsPipelineCreateInfo({},
         2, shader_stages,
         &vertex_input_info,
@@ -420,6 +448,10 @@ bool Engine::create_graphics_pipeline()
     }
 
     m_Pipeline = pipeline;
+
+    m_MainDeletionQueue.push_function([&] {
+        m_Device.destroyPipeline(m_Pipeline);
+    });
 #pragma endregion
 
     m_Device.destroyShaderModule(vert_shader_module);
@@ -497,6 +529,10 @@ bool Engine::create_vertex_buffer()
     memcpy(data, vertices.data(), vertices.size() * sizeof(Vertex));
 
     vmaUnmapMemory(m_Allocator, m_VertexBuffer.Allocation);
+
+    m_MainDeletionQueue.push_function([&] {
+        vmaDestroyBuffer(m_Allocator, m_VertexBuffer.Handle, m_VertexBuffer.Allocation);
+    });
 
     return true;
 }
@@ -651,19 +687,6 @@ Engine::~Engine()
         cleanup_swapchain();
     }
 
-    vmaDestroyBuffer(m_Allocator, m_VertexBuffer.Handle, m_VertexBuffer.Allocation);
-
-    // Graphics pipeline
-    if (m_Pipeline) {
-        m_Device.destroyPipeline(m_Pipeline);
-    }
-    if (m_PipelineLayout) {
-        m_Device.destroyPipelineLayout(m_PipelineLayout);
-    }
-    if (m_RenderPass) {
-        m_Device.destroyRenderPass(m_RenderPass);
-    }
-
     if (m_Frames[0].CommandPool) {
         // Sync Objects
         for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
@@ -675,21 +698,7 @@ Engine::~Engine()
         }
     }
 
-    vmaDestroyAllocator(m_Allocator);
-
-    if (m_Device) {
-        m_Device.destroy();
-    }
-
-    if (m_Instance) {
-        if (m_Surface) {
-            m_Instance.destroySurfaceKHR(m_Surface);
-        }
-        if (enable_validation_layers) {
-            vkb::destroy_debug_utils_messenger(m_Instance, m_DebugMessenger);
-        }
-        m_Instance.destroy();
-    }
+    m_MainDeletionQueue.flush();
 
     glfwDestroyWindow(m_Window);
     glfwTerminate();
