@@ -13,21 +13,22 @@ struct FrameData {
 
 class Engine {
 public:
-    Engine(const uint32_t width, const uint32_t height)
-        : m_WindowExtent(width, height)
-    {
-    }
     ~Engine();
 
-    [[nodiscard]] bool init();
+    [[nodiscard]] bool init(uint32_t width, uint32_t height);
     [[nodiscard]] bool run();
+    bool m_FramebufferResized = false;
 
 private:
     bool m_IsInitialized = false;
     bool m_Running = false;
 
+    int m_FrameNumber { 0 };
+    static constexpr int MAX_FRAMES_IN_FLIGHT = 2;
+
+    FrameData& get_current_frame() { return m_Frames[m_FrameNumber % MAX_FRAMES_IN_FLIGHT]; }
+
     GLFWwindow* m_Window { nullptr };
-    vk::Extent2D m_WindowExtent;
 
     vk::Instance m_Instance { nullptr };
     vk::DebugUtilsMessengerEXT m_DebugMessenger { nullptr };
@@ -52,21 +53,22 @@ private:
 
     std::vector<vk::Framebuffer> m_SwapChainFramebuffers;
 
-    FrameData m_FrameData;
+    std::array<FrameData, MAX_FRAMES_IN_FLIGHT> m_Frames;
 
-    [[nodiscard]] bool init_window();
+    [[nodiscard]] bool init_window(uint32_t width, uint32_t height);
     void init_vulkan();
-    void create_swapchain(uint32_t width, uint32_t height);
-    void destroy_swapchain();
+    void create_swapchain();
+    void cleanup_swapchain();
+    [[nodiscard]] bool recreate_swapchain();
     [[nodiscard]] bool create_render_pass();
     [[nodiscard]] bool create_graphics_pipeline();
     [[nodiscard]] bool create_framebuffers();
-    [[nodiscard]] bool create_command_pool();
+    [[nodiscard]] bool init_commands();
     [[nodiscard]] bool allocate_command_buffer();
     [[nodiscard]] bool record_command_buffer(const vk::CommandBuffer& cmd, uint32_t image_index) const;
     [[nodiscard]] bool create_sync_objects();
 
-    [[nodiscard]] bool draw_frame() const;
+    [[nodiscard]] bool draw_frame();
 };
 
 }

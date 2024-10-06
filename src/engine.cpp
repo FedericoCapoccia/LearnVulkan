@@ -5,18 +5,18 @@ namespace Minecraft {
 
 constexpr bool enable_validation_layers = true;
 
-bool Engine::init()
+bool Engine::init(const uint32_t width, const uint32_t height)
 {
     if (m_IsInitialized) {
         LOG_ERROR("Graphics Manager already initialized.");
         return false;
     }
 
-    if (!init_window())
+    if (!init_window(width, height))
         return false;
 
     init_vulkan();
-    create_swapchain(m_WindowExtent.width, m_WindowExtent.width);
+    create_swapchain();
 
     if (!create_render_pass()) {
         LOG_ERROR("Failed to create render pass");
@@ -33,13 +33,8 @@ bool Engine::init()
         return false;
     }
 
-    if (!create_command_pool()) {
-        LOG_ERROR("Failed to create command pool");
-        return false;
-    }
-
-    if (!allocate_command_buffer()) {
-        LOG_ERROR("Failed to allocate command buffer");
+    if (!init_commands()) {
+        LOG_ERROR("Failed to initialize command structures");
         return false;
     }
 
@@ -52,7 +47,13 @@ bool Engine::init()
     return true;
 }
 
-bool Engine::init_window()
+static void framebuffer_resize_callback(GLFWwindow* window, int width, int height)
+{
+    const auto engine = static_cast<Engine*>(glfwGetWindowUserPointer(window));
+    engine -> m_FramebufferResized = true;
+}
+
+bool Engine::init_window(const uint32_t width, const uint32_t height)
 {
     if (!glfwInit()) {
         LOG_ERROR("Failed to init glfw");
@@ -60,17 +61,17 @@ bool Engine::init_window()
     }
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     m_Window = glfwCreateWindow(
-        static_cast<int>(m_WindowExtent.width),
-        static_cast<int>(m_WindowExtent.height),
-        "Minecraft", nullptr, nullptr);
+        static_cast<int32_t>(width),
+        static_cast<int32_t>(height), "Minecraft", nullptr, nullptr);
 
     if (!m_Window) {
         LOG_ERROR("Failed to create glfw window");
         return false;
     }
 
+    glfwSetWindowUserPointer(m_Window, this);
+    glfwSetFramebufferSizeCallback(m_Window, framebuffer_resize_callback);
     return true;
 }
 
@@ -124,7 +125,7 @@ void Engine::init_vulkan()
     m_GraphicsQueueFamily = vkb_device.get_queue_index(vkb::QueueType::graphics).value();
 }
 
-void Engine::create_swapchain(const uint32_t width, const uint32_t height)
+void Engine::create_swapchain()
 {
     vkb::SwapchainBuilder swapchain_builder(m_PhysicalDevice, m_Device, m_Surface);
     m_SwapChainImageFormat = vk::Format::eB8G8R8A8Unorm;
@@ -134,6 +135,8 @@ void Engine::create_swapchain(const uint32_t width, const uint32_t height)
     constexpr auto image_usage_flags = static_cast<VkImageUsageFlags>(vk::ImageUsageFlagBits::eColorAttachment);
     constexpr auto composite_alpha_flags = static_cast<VkCompositeAlphaFlagBitsKHR>(vk::CompositeAlphaFlagBitsKHR::eOpaque);
 
+    int width, height;
+    glfwGetFramebufferSize(m_Window, &width, &height);
     vkb::Swapchain vkb_swapchain = swapchain_builder
                                        .set_desired_format(surface_format)
                                        .set_desired_present_mode(present_mode)
@@ -150,13 +153,40 @@ void Engine::create_swapchain(const uint32_t width, const uint32_t height)
     m_SwapChainImageViews = vkb_swapchain.get_image_views().value();
 }
 
-void Engine::destroy_swapchain()
+void Engine::cleanup_swapchain()
 {
-    m_Device.destroySwapchainKHR(m_SwapChain);
+    for (const auto& framebuffer : m_SwapChainFramebuffers) {
+        m_Device.destroyFramebuffer(framebuffer);
+    }
 
     for (const auto& image_view : m_SwapChainImageViews) {
         m_Device.destroyImageView(image_view);
     }
+
+    m_Device.destroySwapchainKHR(m_SwapChain);
+}
+
+bool Engine::recreate_swapchain()
+{
+    int width = 0, height = 0;
+    glfwGetFramebufferSize(m_Window, &width, &height);
+    while (width == 0 || height == 0) {
+        glfwGetFramebufferSize(m_Window, &width, &height);
+        glfwWaitEvents();
+    }
+
+    VK_CHECK(m_Device.waitIdle());
+
+    cleanup_swapchain();
+
+    create_swapchain();
+
+    if (!create_framebuffers()) {
+        LOG_ERROR("Failed to create framebuffers");
+        return false;
+    }
+
+    return true;
 }
 
 bool Engine::create_render_pass()
@@ -195,8 +225,7 @@ bool Engine::create_render_pass()
     const vk::RenderPassCreateInfo renderpass_create_info { {},
         1, &color_attachment,
         1, &subpass,
-        1, &color_stage_dependency
-    };
+        1, &color_stage_dependency };
 
     const auto [result, renderpass] = m_Device.createRenderPass(renderpass_create_info);
     VK_CHECK(result);
@@ -391,28 +420,36 @@ bool Engine::create_framebuffers()
     return true;
 }
 
-bool Engine::create_command_pool()
+bool Engine::init_commands()
 {
-    const auto pool_info = vk::CommandPoolCreateInfo(
-        vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
-        m_GraphicsQueueFamily);
-    const auto [result, pool] = m_Device.createCommandPool(pool_info);
+    constexpr auto flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer;
+    const auto pool_info = vk::CommandPoolCreateInfo(flags, m_GraphicsQueueFamily);
 
-    VK_CHECK(result);
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        VK_CHECK(m_Device.createCommandPool(&pool_info, nullptr, &m_Frames[i].CommandPool));
 
-    m_FrameData.CommandPool = pool;
+        const auto allocate_info = vk::CommandBufferAllocateInfo(
+            m_Frames[i].CommandPool, vk::CommandBufferLevel::ePrimary, 1);
+
+        VK_CHECK(m_Device.allocateCommandBuffers(&allocate_info, &m_Frames[i].CommandBuffer));
+    }
+
     return true;
 }
 
-bool Engine::allocate_command_buffer()
+bool Engine::create_sync_objects()
 {
-    const auto allocate_info = vk::CommandBufferAllocateInfo(
-        m_FrameData.CommandPool, vk::CommandBufferLevel::ePrimary, 1);
+    constexpr vk::SemaphoreCreateInfo semaphore_create_info {};
+    constexpr vk::FenceCreateInfo fence_create_info {
+        vk::FenceCreateFlagBits::eSignaled
+    };
 
-    const auto [result, buffer] = m_Device.allocateCommandBuffers(allocate_info);
-    VK_CHECK(result);
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        VK_CHECK(m_Device.createFence(&fence_create_info, nullptr, &m_Frames[i].RenderFence));
+        VK_CHECK(m_Device.createSemaphore(&semaphore_create_info, nullptr, &m_Frames[i].SwapChainSemaphore));
+        VK_CHECK(m_Device.createSemaphore(&semaphore_create_info, nullptr, &m_Frames[i].RenderSemaphore));
+    }
 
-    m_FrameData.CommandBuffer = buffer[0]; // only 1 buffer created
     return true;
 }
 
@@ -452,46 +489,39 @@ bool Engine::record_command_buffer(const vk::CommandBuffer& cmd, const uint32_t 
     return true;
 }
 
-bool Engine::create_sync_objects()
+bool Engine::draw_frame()
 {
-    const auto [s1_res, s1] = m_Device.createSemaphore({});
-    VK_CHECK(s1_res);
-    m_FrameData.SwapChainSemaphore = s1;
-
-    const auto [s2_res, s2] = m_Device.createSemaphore({});
-    VK_CHECK(s2_res);
-    m_FrameData.RenderSemaphore = s2;
-
-    constexpr vk::FenceCreateInfo fence_info {
-        vk::FenceCreateFlagBits::eSignaled
-    };
-    const auto [f_res, f] = m_Device.createFence(fence_info);
-    VK_CHECK(f_res);
-    m_FrameData.RenderFence = f;
-
-    return true;
-}
-
-bool Engine::draw_frame() const
-{
-    VK_CHECK(m_Device.waitForFences(1, &m_FrameData.RenderFence, vk::True, UINT64_MAX));
-
-    VK_CHECK(m_Device.resetFences(1, &m_FrameData.RenderFence));
+    VK_CHECK(m_Device.waitForFences(1, &get_current_frame().RenderFence, vk::True, UINT64_MAX));
 
     uint32_t image_index;
-    VK_CHECK(m_Device.acquireNextImageKHR(
-        m_SwapChain, UINT64_MAX, m_FrameData.SwapChainSemaphore, VK_NULL_HANDLE, &image_index));
+    vk::Result result = m_Device.acquireNextImageKHR(
+        m_SwapChain, UINT64_MAX, get_current_frame().SwapChainSemaphore, VK_NULL_HANDLE, &image_index);
 
-    const vk::CommandBuffer& cmd = m_FrameData.CommandBuffer;
+    if (result == vk::Result::eErrorOutOfDateKHR) {
+        if (!recreate_swapchain()) {
+            LOG_ERROR("failed to recreate swapchain");
+            return false;
+        }
+        return true;
+    }
+
+    if (result != vk::Result::eSuccess && result != vk::Result::eSuboptimalKHR) {
+        LOG_ERROR("Failed to acquire swap chain image");
+        return false;
+    }
+
+    VK_CHECK(m_Device.resetFences(1, &get_current_frame().RenderFence));
+
+    const vk::CommandBuffer& cmd = get_current_frame().CommandBuffer;
     VK_CHECK(cmd.reset());
     if (!record_command_buffer(cmd, image_index)) {
         LOG_ERROR("Failed to record on the command buffer");
         return false;
     }
 
-    vk::Semaphore wait_semaphores[] = { m_FrameData.SwapChainSemaphore };
+    vk::Semaphore wait_semaphores[] = { get_current_frame().SwapChainSemaphore };
     vk::PipelineStageFlags wait_stages[] = { vk::PipelineStageFlagBits::eColorAttachmentOutput };
-    vk::Semaphore signal_semaphores[] = { m_FrameData.RenderSemaphore };
+    vk::Semaphore signal_semaphores[] = { get_current_frame().RenderSemaphore };
 
     const vk::SubmitInfo submit_info {
         1, wait_semaphores, wait_stages,
@@ -499,7 +529,7 @@ bool Engine::draw_frame() const
         1, signal_semaphores
     };
 
-    VK_CHECK(m_GraphicsQueue.submit(1, &submit_info, m_FrameData.RenderFence));
+    VK_CHECK(m_GraphicsQueue.submit(1, &submit_info, get_current_frame().RenderFence));
 
     vk::SwapchainKHR swapchains[] = { m_SwapChain };
 
@@ -509,8 +539,20 @@ bool Engine::draw_frame() const
         nullptr
     };
 
-    VK_CHECK(m_PresentQueue.presentKHR(present_info));
+    result = m_PresentQueue.presentKHR(present_info);
 
+    if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR || m_FramebufferResized) {
+        m_FramebufferResized = false;
+        if (!recreate_swapchain()) {
+            LOG_ERROR("failed to recreate swapchain");
+            return false;
+        }
+    } else if (result != vk::Result::eSuccess) {
+        LOG_ERROR("failed to present swap chain image!");
+        return false;
+    }
+
+    m_FrameNumber++;
     return true;
 }
 
@@ -536,47 +578,30 @@ Engine::~Engine()
 {
     LOG("GfxManager destructor");
 
-    // Sync Objects
-    if (m_FrameData.SwapChainSemaphore) {
-        m_Device.destroySemaphore(m_FrameData.SwapChainSemaphore);
-    }
-
-    if (m_FrameData.RenderSemaphore) {
-        m_Device.destroySemaphore(m_FrameData.RenderSemaphore);
-    }
-
-    if (m_FrameData.RenderFence) {
-        m_Device.destroyFence(m_FrameData.RenderFence);
-    }
-
-    if (m_FrameData.CommandPool) {
-        m_Device.destroyCommandPool(m_FrameData.CommandPool);
+    if (m_SwapChain) {
+        cleanup_swapchain();
     }
 
     // Graphics pipeline
-    for (const auto& framebuffer : m_SwapChainFramebuffers) {
-        m_Device.destroyFramebuffer(framebuffer);
-    }
-
     if (m_Pipeline) {
         m_Device.destroyPipeline(m_Pipeline);
     }
-
     if (m_PipelineLayout) {
         m_Device.destroyPipelineLayout(m_PipelineLayout);
     }
-
     if (m_RenderPass) {
         m_Device.destroyRenderPass(m_RenderPass);
     }
 
-    // Core
-    if (m_SwapChain) {
-        destroy_swapchain();
-    }
+    if (m_Frames[0].CommandPool) {
+        // Sync Objects
+        for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+            m_Device.destroyCommandPool(m_Frames[i].CommandPool);
 
-    if (m_Surface) {
-        m_Instance.destroySurfaceKHR(m_Surface);
+            m_Device.destroyFence(m_Frames[i].RenderFence);
+            m_Device.destroySemaphore(m_Frames[i].RenderSemaphore);
+            m_Device.destroySemaphore(m_Frames[i].SwapChainSemaphore);
+        }
     }
 
     if (m_Device) {
@@ -584,6 +609,9 @@ Engine::~Engine()
     }
 
     if (m_Instance) {
+        if (m_Surface) {
+            m_Instance.destroySurfaceKHR(m_Surface);
+        }
         if (enable_validation_layers) {
             vkb::destroy_debug_utils_messenger(m_Instance, m_DebugMessenger);
         }

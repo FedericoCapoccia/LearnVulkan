@@ -3,8 +3,8 @@
 
 int main()
 {
-    Minecraft::Engine engine { 1280, 720 };
-    if (!engine.init()) {
+    Minecraft::Engine engine;
+    if (!engine.init(1280, 720)) {
         return EXIT_FAILURE;
     }
 
