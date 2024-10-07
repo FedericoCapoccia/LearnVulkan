@@ -44,12 +44,11 @@ struct Vertex {
 };
 
 struct GpuManagerSpec {
-    const char* AppName;
+    const char* AppName { "Default Application Name" };
     bool EnableValidation { true };
     std::optional<PFN_vkDebugUtilsMessengerCallbackEXT> DebugCallback;
-    GLFWwindow* Window;
+    GLFWwindow* Window { nullptr };
 
-    GpuManagerSpec() = delete;
     GpuManagerSpec(const char* const app_name, const bool enable_validation, const std::optional<PFN_vkDebugUtilsMessengerCallbackEXT>& debug_callback, GLFWwindow* const window)
         : AppName(app_name)
         , EnableValidation(enable_validation)
