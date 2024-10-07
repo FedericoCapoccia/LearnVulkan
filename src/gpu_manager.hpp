@@ -82,7 +82,7 @@ struct SwapchainBundle {
     std::vector<VkImage> Images;
     std::vector<VkImageView> ImageViews;
     vk::Extent2D Extent {};
-    std::vector<vk::Framebuffer> Framebuffers;
+    //std::vector<vk::Framebuffer> Framebuffers;
 };
 
 struct Vertex {
@@ -129,7 +129,7 @@ public:
         m_PhysicalDevice = { nullptr };
 
         m_SwapchainBundle = { nullptr };
-        m_RenderPass = { nullptr };
+        //m_RenderPass = { nullptr };
 
         m_VertexBuffer = {};
 
@@ -144,7 +144,7 @@ public:
     std::expected<vk::Buffer, const char*> create_vertex_buffer(const std::vector<Vertex>& vertices);
 
     vk::Device& device() { return m_Device; }
-    [[nodiscard]] vk::RenderPass render_pass() const { return m_RenderPass; }
+    //[[nodiscard]] vk::RenderPass render_pass() const { return m_RenderPass; }
 
 private:
     bool m_Initialized { false };
@@ -165,7 +165,7 @@ private:
 
     SwapchainBundle m_SwapchainBundle;
     DeletionQueue m_SwapchainDeletionQueue;
-    vk::RenderPass m_RenderPass;
+    //vk::RenderPass m_RenderPass;
 
     Buffer m_VertexBuffer {};
 
@@ -175,8 +175,8 @@ private:
     void init_allocator();
 
     void create_swapchain(const SwapchainSpec& spec);
-    void create_render_pass();
-    void create_framebuffers();
+    //void create_render_pass();
+    //void create_framebuffers();
 };
 
 }

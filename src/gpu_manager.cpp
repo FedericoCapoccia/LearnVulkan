@@ -71,8 +71,8 @@ const SwapchainBundle& GpuManager::init(const GpuManagerSpec& spec)
     init_allocator();
 
     create_swapchain(spec.SwapchainSpec_);
-    create_render_pass();
-    create_framebuffers();
+    //create_render_pass();
+    //create_framebuffers();
 
     m_Initialized = true;
     return m_SwapchainBundle;
@@ -88,7 +88,7 @@ const SwapchainBundle& GpuManager::recreate_swapchain(const SwapchainSpec& spec)
     }
 
     create_swapchain(spec);
-    create_framebuffers();
+    //create_framebuffers();
 
     return m_SwapchainBundle;
 }
@@ -226,83 +226,83 @@ void GpuManager::create_swapchain(const SwapchainSpec& spec)
     });
 }
 
-void GpuManager::create_render_pass()
-{
-    const auto color_attachment = vk::AttachmentDescription({},
-        m_SwapchainBundle.ImageFormat,
-        vk::SampleCountFlagBits::e1,
-        vk::AttachmentLoadOp::eClear,
-        vk::AttachmentStoreOp::eStore,
-        vk::AttachmentLoadOp::eDontCare,
-        vk::AttachmentStoreOp::eDontCare,
-        vk::ImageLayout::eUndefined,
-        vk::ImageLayout::ePresentSrcKHR);
+//void GpuManager::create_render_pass()
+//{
+//    const auto color_attachment = vk::AttachmentDescription({},
+//        m_SwapchainBundle.ImageFormat,
+//        vk::SampleCountFlagBits::e1,
+//        vk::AttachmentLoadOp::eClear,
+//        vk::AttachmentStoreOp::eStore,
+//        vk::AttachmentLoadOp::eDontCare,
+//        vk::AttachmentStoreOp::eDontCare,
+//        vk::ImageLayout::eUndefined,
+//        vk::ImageLayout::ePresentSrcKHR);
+//
+//    // References to descriptions
+//    constexpr auto color_attachment_ref = vk::AttachmentReference(0, vk::ImageLayout::eColorAttachmentOptimal);
+//
+//    // ReSharper disable once CppVariableCanBeMadeConstexpr
+//    const auto subpass = vk::SubpassDescription({},
+//        vk::PipelineBindPoint::eGraphics,
+//        0, {},
+//        1, &color_attachment_ref,
+//        nullptr,
+//        {},
+//        0, {});
+//
+//    constexpr vk::SubpassDependency color_stage_dependency {
+//        vk::SubpassExternal,
+//        0,
+//        vk::PipelineStageFlagBits::eColorAttachmentOutput,
+//        vk::PipelineStageFlagBits::eColorAttachmentOutput,
+//        {},
+//        vk::AccessFlagBits::eColorAttachmentWrite
+//    };
+//
+//    const vk::RenderPassCreateInfo renderpass_create_info { {},
+//        1, &color_attachment,
+//        1, &subpass,
+//        1, &color_stage_dependency };
+//
+//    vk::Result _ = m_Device.createRenderPass(&renderpass_create_info, nullptr, &m_RenderPass);
+//    (void)_;
+//
+//    m_DeletionQueue.push_function("Render pass", [&] {
+//        m_Device.destroyRenderPass(m_RenderPass);
+//    });
+//}
 
-    // References to descriptions
-    constexpr auto color_attachment_ref = vk::AttachmentReference(0, vk::ImageLayout::eColorAttachmentOptimal);
-
-    // ReSharper disable once CppVariableCanBeMadeConstexpr
-    const auto subpass = vk::SubpassDescription({},
-        vk::PipelineBindPoint::eGraphics,
-        0, {},
-        1, &color_attachment_ref,
-        nullptr,
-        {},
-        0, {});
-
-    constexpr vk::SubpassDependency color_stage_dependency {
-        vk::SubpassExternal,
-        0,
-        vk::PipelineStageFlagBits::eColorAttachmentOutput,
-        vk::PipelineStageFlagBits::eColorAttachmentOutput,
-        {},
-        vk::AccessFlagBits::eColorAttachmentWrite
-    };
-
-    const vk::RenderPassCreateInfo renderpass_create_info { {},
-        1, &color_attachment,
-        1, &subpass,
-        1, &color_stage_dependency };
-
-    vk::Result _ = m_Device.createRenderPass(&renderpass_create_info, nullptr, &m_RenderPass);
-    (void)_;
-
-    m_DeletionQueue.push_function("Render pass", [&] {
-        m_Device.destroyRenderPass(m_RenderPass);
-    });
-}
-
-void GpuManager::create_framebuffers()
-{
-    const size_t image_views_size = m_SwapchainBundle.ImageViews.size();
-
-    m_SwapchainBundle.Framebuffers.resize(image_views_size);
-
-    for (int i = 0; i < image_views_size; i++) {
-        const vk::ImageView attachments[] = {
-            m_SwapchainBundle.ImageViews[i]
-        };
-
-        const auto framebuffer_info = vk::FramebufferCreateInfo({},
-            m_RenderPass,
-            1,
-            attachments,
-            m_SwapchainBundle.Extent.width, m_SwapchainBundle.Extent.height,
-            1);
-
-        vk::Result _ = m_Device.createFramebuffer(&framebuffer_info, nullptr, &m_SwapchainBundle.Framebuffers[i]);
-        (void)_;
-    }
-}
+//void GpuManager::create_framebuffers()
+//{
+//    const size_t image_views_size = m_SwapchainBundle.ImageViews.size();
+//
+//    m_SwapchainBundle.Framebuffers.resize(image_views_size);
+//
+//    for (int i = 0; i < image_views_size; i++) {
+//        const vk::ImageView attachments[] = {
+//            m_SwapchainBundle.ImageViews[i]
+//        };
+//
+//        const auto framebuffer_info = vk::FramebufferCreateInfo({},
+//            m_RenderPass,
+//            1,
+//            attachments,
+//            m_SwapchainBundle.Extent.width, m_SwapchainBundle.Extent.height,
+//            1);
+//
+//        vk::Result _ = m_Device.createFramebuffer(&framebuffer_info, nullptr, &m_SwapchainBundle.Framebuffers[i]);
+//        (void)_;
+//    }
+//}
 
 void GpuManager::cleanup_swapchain()
 {
     const vk::Result _ = m_Device.waitIdle();
     (void)_;
 
-    for (const auto& framebuffer : m_SwapchainBundle.Framebuffers) {
-        m_Device.destroyFramebuffer(framebuffer);
-    }
+    //for (const auto& framebuffer : m_SwapchainBundle.Framebuffers) {
+    //    m_Device.destroyFramebuffer(framebuffer);
+    //}
 
     for (const auto& image_view : m_SwapchainBundle.ImageViews) {
         m_Device.destroyImageView(image_view);
