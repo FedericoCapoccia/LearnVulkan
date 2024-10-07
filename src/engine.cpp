@@ -2,7 +2,10 @@
 #include "gpu_manager.hpp"
 #include "logger.hpp"
 
-namespace Minecraft {
+// Important for VMA, better to sync with GpuManager::InstanceSpec::ApiVersion
+#define VMA_VULKAN_VERSION 1003000
+
+namespace Minecraft::VkEngine {
 
 constexpr bool enable_validation_layers = true;
 
@@ -17,27 +20,19 @@ bool Engine::init(const uint32_t width, const uint32_t height)
         return false;
 
     init_vulkan();
-    create_swapchain();
-
-    if (!create_render_pass()) {
-        LOG_ERROR("Failed to create render pass");
-        return false;
-    }
 
     if (!create_graphics_pipeline()) {
         LOG_ERROR("Failed to create the graphics pipeline");
         return false;
     }
 
-    if (!create_framebuffers()) {
-        LOG_ERROR("Failed to create framebuffers");
-        return false;
+    const auto res = m_GpuManager.create_vertex_buffer(vertices);
+
+    if (!res.has_value()) {
+        LOG_ERROR("{}", res.error());
     }
 
-    if (!create_vertex_buffer()) {
-        LOG_ERROR("Failed to create vertex buffer");
-        return false;
-    }
+    m_VertexBufferHandle = res.value();
 
     if (!init_commands()) {
         LOG_ERROR("Failed to initialize command structures");
@@ -83,130 +78,36 @@ bool Engine::init_window(const uint32_t width, const uint32_t height)
 
 void Engine::init_vulkan()
 {
-    m_GpuManager.init(m_Window);
-
-    m_Surface = m_GpuManager.surface();
-    m_PhysicalDevice = m_GpuManager.physical_device();
-    m_Device = m_GpuManager.device();
-    m_Allocator = m_GpuManager.allocator();
-
-    m_PresentQueue = m_GpuManager.get_queue(vkb::QueueType::present);
-    m_GraphicsQueue = m_GpuManager.get_queue(vkb::QueueType::graphics);
-    m_GraphicsQueueFamily = m_GpuManager.get_queue_index(vkb::QueueType::graphics);
-}
-
-void Engine::create_swapchain()
-{
-    vkb::SwapchainBuilder swapchain_builder(m_PhysicalDevice, m_Device, m_Surface);
-    m_SwapChainImageFormat = vk::Format::eB8G8R8A8Unorm;
-
-    const auto surface_format = vk::SurfaceFormatKHR { m_SwapChainImageFormat, vk::ColorSpaceKHR::eSrgbNonlinear };
-    constexpr auto present_mode = static_cast<VkPresentModeKHR>(vk::PresentModeKHR::eFifo);
-    constexpr auto image_usage_flags = static_cast<VkImageUsageFlags>(vk::ImageUsageFlagBits::eColorAttachment);
-    constexpr auto composite_alpha_flags = static_cast<VkCompositeAlphaFlagBitsKHR>(vk::CompositeAlphaFlagBitsKHR::eOpaque);
-
-    int width, height;
-    glfwGetFramebufferSize(m_Window, &width, &height);
-    vkb::Swapchain vkb_swapchain = swapchain_builder
-                                       .set_desired_format(surface_format)
-                                       .set_desired_present_mode(present_mode)
-                                       .set_clipped()
-                                       .set_desired_extent(width, height)
-                                       .add_image_usage_flags(image_usage_flags)
-                                       .set_composite_alpha_flags(composite_alpha_flags)
-                                       .build()
-                                       .value();
-
-    m_SwapChainExtent = vkb_swapchain.extent;
-    m_SwapChain = vkb_swapchain.swapchain;
-    m_SwapChainImages = vkb_swapchain.get_images().value();
-    m_SwapChainImageViews = vkb_swapchain.get_image_views().value();
-}
-
-void Engine::cleanup_swapchain()
-{
-    for (const auto& framebuffer : m_SwapChainFramebuffers) {
-        m_Device.destroyFramebuffer(framebuffer);
-    }
-
-    for (const auto& image_view : m_SwapChainImageViews) {
-        m_Device.destroyImageView(image_view);
-    }
-
-    m_Device.destroySwapchainKHR(m_SwapChain);
-}
-
-bool Engine::recreate_swapchain()
-{
-    int width = 0, height = 0;
-    glfwGetFramebufferSize(m_Window, &width, &height);
-    while (width == 0 || height == 0) {
-        glfwGetFramebufferSize(m_Window, &width, &height);
-        glfwWaitEvents();
-    }
-
-    VK_CHECK(m_Device.waitIdle());
-
-    cleanup_swapchain();
-
-    create_swapchain();
-
-    if (!create_framebuffers()) {
-        LOG_ERROR("Failed to create framebuffers");
-        return false;
-    }
-
-    return true;
-}
-
-bool Engine::create_render_pass()
-{
-    const auto color_attachment = vk::AttachmentDescription({},
-        m_SwapChainImageFormat,
-        vk::SampleCountFlagBits::e1,
-        vk::AttachmentLoadOp::eClear,
-        vk::AttachmentStoreOp::eStore,
-        vk::AttachmentLoadOp::eDontCare,
-        vk::AttachmentStoreOp::eDontCare,
-        vk::ImageLayout::eUndefined,
-        vk::ImageLayout::ePresentSrcKHR);
-
-    // References to descriptions
-    constexpr auto color_attachment_ref = vk::AttachmentReference(0, vk::ImageLayout::eColorAttachmentOptimal);
-
-    // ReSharper disable once CppVariableCanBeMadeConstexpr
-    const auto subpass = vk::SubpassDescription({},
-        vk::PipelineBindPoint::eGraphics,
-        0, {},
-        1, &color_attachment_ref,
-        nullptr,
-        {},
-        0, {});
-
-    constexpr vk::SubpassDependency color_stage_dependency {
-        vk::SubpassExternal,
-        0,
-        vk::PipelineStageFlagBits::eColorAttachmentOutput,
-        vk::PipelineStageFlagBits::eColorAttachmentOutput,
-        {},
-        vk::AccessFlagBits::eColorAttachmentWrite
+    const InstanceSpec instance_spec {
+        "Minecraft",
+        { 1, 3, 0 },
+        true,
+        Logger::debug_callback,
+        {}
     };
 
-    const vk::RenderPassCreateInfo renderpass_create_info { {},
-        1, &color_attachment,
-        1, &subpass,
-        1, &color_stage_dependency };
+    const DeviceSpec device_spec {
+        { 1, 3 },
+        false,
+        false
+    };
 
-    const auto [result, renderpass] = m_Device.createRenderPass(renderpass_create_info);
-    VK_CHECK(result);
+    const GpuManagerSpec spec {
+        instance_spec,
+        device_spec,
+        get_default_swapchain_spec()
+    };
 
-    m_RenderPass = renderpass;
+    m_SwapchainBundle = m_GpuManager.init(spec);
 
-    m_MainDeletionQueue.push_function([&] {
-        m_Device.destroyRenderPass(m_RenderPass);
+    m_MainDeletionQueue.push_function("Gpu Manager", [&] {
+        m_GpuManager.destroy();
     });
 
-    return true;
+    m_Device = m_GpuManager.device();
+
+    m_PresentQueue = m_GpuManager.get_queue(vkb::QueueType::present, false);
+    m_GraphicsQueue = m_GpuManager.get_queue(vkb::QueueType::graphics, false);
 }
 
 static std::vector<char> read_file(const std::string& filepath)
@@ -340,11 +241,9 @@ bool Engine::create_graphics_pipeline()
         0, nullptr,
         0, nullptr);
 
-    const auto [pipeline_layout_res, pipeline_layout] = m_Device.createPipelineLayout(pipeline_layout_info);
-    VK_CHECK(pipeline_layout_res);
-    m_PipelineLayout = pipeline_layout;
+    VK_CHECK(m_Device.createPipelineLayout(&pipeline_layout_info, nullptr, &m_PipelineLayout));
 
-    m_MainDeletionQueue.push_function([&] {
+    m_MainDeletionQueue.push_function("Pipeline layout", [&] {
         m_Device.destroyPipelineLayout(m_PipelineLayout);
     });
 
@@ -360,7 +259,7 @@ bool Engine::create_graphics_pipeline()
         &color_blending,
         &dynamic_state,
         m_PipelineLayout,
-        m_RenderPass,
+        m_GpuManager.render_pass(),
         0,
         VK_NULL_HANDLE,
         -1);
@@ -374,7 +273,7 @@ bool Engine::create_graphics_pipeline()
 
     m_Pipeline = pipeline;
 
-    m_MainDeletionQueue.push_function([&] {
+    m_MainDeletionQueue.push_function("Pipeline", [&] {
         m_Device.destroyPipeline(m_Pipeline);
     });
 #pragma endregion
@@ -384,33 +283,10 @@ bool Engine::create_graphics_pipeline()
     return true;
 }
 
-bool Engine::create_framebuffers()
-{
-    m_SwapChainFramebuffers.resize(m_SwapChainImageViews.size());
-
-    for (int i = 0; i < m_SwapChainImageViews.size(); i++) {
-        const vk::ImageView attachments[] = {
-            m_SwapChainImageViews[i]
-        };
-
-        const auto framebuffer_info = vk::FramebufferCreateInfo({},
-            m_RenderPass,
-            1,
-            attachments,
-            m_SwapChainExtent.width, m_SwapChainExtent.height,
-            1);
-
-        const auto [fb_res, framebuffer] = m_Device.createFramebuffer(framebuffer_info);
-        VK_CHECK(fb_res);
-        m_SwapChainFramebuffers[i] = framebuffer;
-    }
-    return true;
-}
-
 bool Engine::init_commands()
 {
     constexpr auto flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer;
-    const auto pool_info = vk::CommandPoolCreateInfo(flags, m_GraphicsQueueFamily);
+    const auto pool_info = vk::CommandPoolCreateInfo(flags, m_GraphicsQueue.FamilyIndex);
 
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         VK_CHECK(m_Device.createCommandPool(&pool_info, nullptr, &m_Frames[i].CommandPool));
@@ -420,44 +296,6 @@ bool Engine::init_commands()
 
         VK_CHECK(m_Device.allocateCommandBuffers(&allocate_info, &m_Frames[i].CommandBuffer));
     }
-
-    return true;
-}
-
-bool Engine::create_vertex_buffer()
-{
-    VkBufferCreateInfo buffer_info = {};
-    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    buffer_info.size = sizeof(vertices[0]) * vertices.size();
-    buffer_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-    buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-    VmaAllocationCreateInfo alloc_info {};
-    alloc_info.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
-
-    VkBuffer buffer;
-    VmaAllocation allocation;
-
-    if (const VkResult result = vmaCreateBuffer(m_Allocator, &buffer_info, &alloc_info, &buffer, &allocation, nullptr); result != VK_SUCCESS) {
-        LOG_ERROR("Vertex buffer allocation failed");
-        return false;
-    }
-
-    m_VertexBuffer = {
-        .Handle = buffer,
-        .Allocation = allocation
-    };
-
-    void* data;
-    vmaMapMemory(m_Allocator, m_VertexBuffer.Allocation, &data);
-
-    memcpy(data, vertices.data(), vertices.size() * sizeof(Vertex));
-
-    vmaUnmapMemory(m_Allocator, m_VertexBuffer.Allocation);
-
-    m_MainDeletionQueue.push_function([&] {
-        vmaDestroyBuffer(m_Allocator, m_VertexBuffer.Handle, m_VertexBuffer.Allocation);
-    });
 
     return true;
 }
@@ -483,13 +321,13 @@ bool Engine::record_command_buffer(const vk::CommandBuffer& cmd, const uint32_t 
     vk::CommandBufferUsageFlagBits flags {};
     VK_CHECK(cmd.begin({ flags }));
 
-    const vk::Rect2D scissor({ 0, 0 }, m_SwapChainExtent);
+    const vk::Rect2D scissor({ 0, 0 }, m_SwapchainBundle.Extent);
 
     vk::ClearValue clear_color = { { 0.0f, 0.0f, 0.0f, 1.0f } };
 
     const vk::RenderPassBeginInfo render_pass_info {
-        m_RenderPass,
-        m_SwapChainFramebuffers[image_index],
+        m_GpuManager.render_pass(),
+        m_SwapchainBundle.Framebuffers[image_index],
         scissor,
         1, &clear_color
     };
@@ -497,7 +335,8 @@ bool Engine::record_command_buffer(const vk::CommandBuffer& cmd, const uint32_t 
     cmd.beginRenderPass(render_pass_info, vk::SubpassContents::eInline);
     cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, m_Pipeline);
 
-    const vk::Buffer vertexBuffers[] = { m_VertexBuffer.Handle };
+    // TODO Vertex Buffer things
+    const vk::Buffer vertexBuffers[] = { m_VertexBufferHandle };
     // ReSharper disable once CppRedundantZeroInitializerInAggregateInitialization
     constexpr vk::DeviceSize offsets[] = { 0 };
 
@@ -507,8 +346,8 @@ bool Engine::record_command_buffer(const vk::CommandBuffer& cmd, const uint32_t 
     cmd.setScissor(0, 1, &scissor);
 
     const vk::Viewport viewport(0.0f, 0.0f,
-        static_cast<float>(m_SwapChainExtent.width),
-        static_cast<float>(m_SwapChainExtent.height),
+        static_cast<float>(m_SwapchainBundle.Extent.width),
+        static_cast<float>(m_SwapchainBundle.Extent.height),
         0.0f, 1.0f);
     cmd.setViewport(0, 1, &viewport);
 
@@ -526,13 +365,10 @@ bool Engine::draw_frame()
 
     uint32_t image_index;
     vk::Result result = m_Device.acquireNextImageKHR(
-        m_SwapChain, UINT64_MAX, get_current_frame().SwapChainSemaphore, VK_NULL_HANDLE, &image_index);
+        m_SwapchainBundle.Swapchain, UINT64_MAX, get_current_frame().SwapChainSemaphore, VK_NULL_HANDLE, &image_index);
 
     if (result == vk::Result::eErrorOutOfDateKHR) {
-        if (!recreate_swapchain()) {
-            LOG_ERROR("failed to recreate swapchain");
-            return false;
-        }
+        m_SwapchainBundle = m_GpuManager.recreate_swapchain(get_default_swapchain_spec());
         return true;
     }
 
@@ -560,9 +396,9 @@ bool Engine::draw_frame()
         1, signal_semaphores
     };
 
-    VK_CHECK(m_GraphicsQueue.submit(1, &submit_info, get_current_frame().RenderFence));
+    VK_CHECK(m_GraphicsQueue.Queue.submit(1, &submit_info, get_current_frame().RenderFence));
 
-    vk::SwapchainKHR swapchains[] = { m_SwapChain };
+    vk::SwapchainKHR swapchains[] = { m_SwapchainBundle.Swapchain };
 
     const vk::PresentInfoKHR present_info {
         1, signal_semaphores,
@@ -570,14 +406,11 @@ bool Engine::draw_frame()
         nullptr
     };
 
-    result = m_PresentQueue.presentKHR(present_info);
+    result = m_PresentQueue.Queue.presentKHR(present_info);
 
     if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR || m_FramebufferResized) {
         m_FramebufferResized = false;
-        if (!recreate_swapchain()) {
-            LOG_ERROR("failed to recreate swapchain");
-            return false;
-        }
+        m_SwapchainBundle = m_GpuManager.recreate_swapchain(get_default_swapchain_spec());
     } else if (result != vk::Result::eSuccess) {
         LOG_ERROR("failed to present swap chain image!");
         return false;
@@ -608,9 +441,7 @@ bool Engine::run()
 
 Engine::~Engine()
 {
-    if (m_SwapChain) {
-        cleanup_swapchain();
-    }
+    m_GpuManager.cleanup_swapchain();
 
     if (m_Frames[0].CommandPool) {
         // Sync Objects
@@ -624,8 +455,6 @@ Engine::~Engine()
     }
 
     m_MainDeletionQueue.flush();
-
-    m_GpuManager.destroy();
 
     glfwDestroyWindow(m_Window);
     glfwTerminate();
