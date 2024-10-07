@@ -1,9 +1,6 @@
 #include "engine.hpp"
-#include "logger.hpp"
 #include "gpu_manager.hpp"
-
-#define VMA_IMPLEMENTATION
-#include <vk_mem_alloc.h>
+#include "logger.hpp"
 
 namespace Minecraft {
 
@@ -86,89 +83,16 @@ bool Engine::init_window(const uint32_t width, const uint32_t height)
 
 void Engine::init_vulkan()
 {
-#pragma region Instance
+    m_GpuManager.init(m_Window);
 
-    vkb::InstanceBuilder builder;
+    m_Surface = m_GpuManager.surface();
+    m_PhysicalDevice = m_GpuManager.physical_device();
+    m_Device = m_GpuManager.device();
+    m_Allocator = m_GpuManager.allocator();
 
-    auto instance_builder = builder.set_app_name("Minecraft")
-                                .require_api_version(1, 3, 0);
-
-    if (enable_validation_layers) {
-        instance_builder.request_validation_layers().set_debug_callback(Logger::debug_callback);
-    }
-
-    const vkb::Instance vkb_inst = instance_builder.build().value();
-
-    m_Instance = vkb_inst.instance;
-    m_MainDeletionQueue.push_function([&] {
-        m_Instance.destroy();
-    });
-
-    if (enable_validation_layers) {
-        m_DebugMessenger = vkb_inst.debug_messenger;
-        m_MainDeletionQueue.push_function([&] {
-            vkb::destroy_debug_utils_messenger(m_Instance, m_DebugMessenger);
-        });
-    }
-
-    // Logger::log_available_extensions(vk::enumerateInstanceExtensionProperties().value);
-    // Logger::log_available_layers(vk::enumerateInstanceLayerProperties().value);
-
-#pragma endregion
-
-#pragma region Device
-
-    VkSurfaceKHR c_surface;
-    glfwCreateWindowSurface(m_Instance, m_Window, nullptr, &c_surface);
-    m_Surface = c_surface;
-
-    m_MainDeletionQueue.push_function([&] {
-        m_Instance.destroySurfaceKHR(m_Surface);
-    });
-
-    vkb::PhysicalDeviceSelector selector { vkb_inst };
-    vkb::PhysicalDevice vkb_physical_device = selector
-                                                  .set_minimum_version(1, 3)
-                                                  .set_surface(m_Surface)
-                                                  .select()
-                                                  .value();
-
-    vkb::DeviceBuilder device_builder { vkb_physical_device };
-    vkb::Device vkb_device = device_builder.build().value();
-
-    m_PhysicalDevice = vkb_physical_device.physical_device;
-    m_Device = vkb_device.device;
-
-    m_MainDeletionQueue.push_function([&] {
-        m_Device.destroy();
-    });
-
-    Logger::log_device_properties(m_PhysicalDevice);
-
-#pragma endregion
-
-    m_PresentQueue = vkb_device.get_queue(vkb::QueueType::present).value();
-    m_GraphicsQueue = vkb_device.get_queue(vkb::QueueType::graphics).value();
-    m_GraphicsQueueFamily = vkb_device.get_queue_index(vkb::QueueType::graphics).value();
-
-#define VMA_VULKAN_VERSION 1003000
-
-    VmaVulkanFunctions vulkanFunctions = {};
-    vulkanFunctions.vkGetInstanceProcAddr = &vkGetInstanceProcAddr;
-    vulkanFunctions.vkGetDeviceProcAddr = &vkGetDeviceProcAddr;
-
-    VmaAllocatorCreateInfo allocator_create_info = {};
-    allocator_create_info.flags = VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
-    allocator_create_info.vulkanApiVersion = VK_API_VERSION_1_3;
-    allocator_create_info.physicalDevice = m_PhysicalDevice;
-    allocator_create_info.device = m_Device;
-    allocator_create_info.instance = m_Instance;
-    allocator_create_info.pVulkanFunctions = &vulkanFunctions;
-
-    vmaCreateAllocator(&allocator_create_info, &m_Allocator);
-    m_MainDeletionQueue.push_function([&] {
-        vmaDestroyAllocator(m_Allocator);
-    });
+    m_PresentQueue = m_GpuManager.get_queue(vkb::QueueType::present);
+    m_GraphicsQueue = m_GpuManager.get_queue(vkb::QueueType::graphics);
+    m_GraphicsQueueFamily = m_GpuManager.get_queue_index(vkb::QueueType::graphics);
 }
 
 void Engine::create_swapchain()
@@ -700,6 +624,8 @@ Engine::~Engine()
     }
 
     m_MainDeletionQueue.flush();
+
+    m_GpuManager.destroy();
 
     glfwDestroyWindow(m_Window);
     glfwTerminate();

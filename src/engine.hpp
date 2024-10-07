@@ -58,6 +58,7 @@ const std::vector<Vertex> vertices = {
 
 class Engine {
 public:
+    explicit Engine(const bool enable_layers) : m_GpuManager(VulkanEngine::GpuManager(enable_layers)) {}
     ~Engine();
 
     [[nodiscard]] bool init(uint32_t width, uint32_t height);
@@ -76,14 +77,13 @@ private:
     FrameData& get_current_frame() { return m_Frames[m_FrameNumber % MAX_FRAMES_IN_FLIGHT]; }
 
     GLFWwindow* m_Window { nullptr };
+    VulkanEngine::GpuManager m_GpuManager;
 
-    VmaAllocator m_Allocator {};
-    vk::Instance m_Instance { nullptr };
-    vk::DebugUtilsMessengerEXT m_DebugMessenger { nullptr };
-    vk::SurfaceKHR m_Surface;
-
+    // TODO lasciare solo device
+    vk::SurfaceKHR m_Surface { nullptr };
     vk::PhysicalDevice m_PhysicalDevice { nullptr };
     vk::Device m_Device { nullptr };
+    VmaAllocator m_Allocator {};
 
     vk::SwapchainKHR m_SwapChain { nullptr };
     vk::Format m_SwapChainImageFormat {};
