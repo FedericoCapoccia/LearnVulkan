@@ -2,74 +2,9 @@
 #include "types.hpp"
 #include <vk_mem_alloc.h>
 
+#include <utility>
+
 namespace Minecraft::VkEngine {
-
-struct InstanceSpec {
-    const char* AppName;
-    bool EnableValidationLayers;
-    /*
-     * Ignored if validation layers not enabled
-     * If validation layers are enabled and this is null a default callback is provided
-     */
-    std::optional<PFN_vkDebugUtilsMessengerCallbackEXT> DebugCallback;
-    std::vector<const char*> Extensions;
-
-    InstanceSpec() = delete;
-    InstanceSpec(
-        const char* app_name,
-        const bool enable_validation_layers,
-        const std::optional<PFN_vkDebugUtilsMessengerCallbackEXT>& debug_callback,
-        const std::vector<const char*>& extensions)
-        : AppName(app_name)
-        , EnableValidationLayers(enable_validation_layers)
-        , DebugCallback(debug_callback)
-        , Extensions(extensions)
-    {
-    }
-};
-
-struct DeviceSpec {
-    bool RequireDedicatedComputeQueue;
-    bool RequireDedicatedTransferQueue;
-
-    DeviceSpec() = delete;
-    DeviceSpec(
-        const bool require_dedicated_compute_queue,
-        const bool require_dedicated_transfer_queue)
-        : RequireDedicatedComputeQueue(require_dedicated_compute_queue)
-        , RequireDedicatedTransferQueue(require_dedicated_transfer_queue)
-    {
-    }
-};
-
-struct SwapchainSpec {
-    GLFWwindow* Window;
-    vk::SurfaceFormatKHR Format;
-    vk::PresentModeKHR PresentMode;
-    vk::ImageUsageFlagBits ImageUsageFlagBits;
-    vk::CompositeAlphaFlagBitsKHR CompositeAlphaFlagBits;
-
-    SwapchainSpec() = delete;
-    explicit SwapchainSpec(
-        GLFWwindow* window,
-        const vk::SurfaceFormatKHR& format,
-        const vk::PresentModeKHR& present_mode,
-        const vk::ImageUsageFlagBits& image_usage_flag_bits,
-        const vk::CompositeAlphaFlagBitsKHR& composite_alpha_flag_bits)
-        : Window(window)
-        , Format(format)
-        , PresentMode(present_mode)
-        , ImageUsageFlagBits(image_usage_flag_bits)
-        , CompositeAlphaFlagBits(composite_alpha_flag_bits)
-    {
-    }
-};
-
-struct GpuManagerSpec {
-    const InstanceSpec& InstanceSpec_;
-    const DeviceSpec& DeviceSpec_;
-    const SwapchainSpec& SwapchainSpec_;
-};
 
 struct QueueBundle {
     vk::Queue Queue;
@@ -77,12 +12,12 @@ struct QueueBundle {
 };
 
 struct SwapchainBundle {
-    vk::SwapchainKHR Swapchain { nullptr };
+    vk::SwapchainKHR Handle;
     vk::Format ImageFormat {};
     std::vector<VkImage> Images;
     std::vector<VkImageView> ImageViews;
     vk::Extent2D Extent {};
-    //std::vector<vk::Framebuffer> Framebuffers;
+    vk::Extent2D DrawExtent {};
 };
 
 struct Vertex {
@@ -108,75 +43,70 @@ struct Vertex {
     }
 };
 
-struct Buffer {
-    vk::Buffer Handle { nullptr };
-    VmaAllocation Allocation;
+struct GpuManagerSpec {
+    const char* AppName;
+    bool EnableValidation { true };
+    std::optional<PFN_vkDebugUtilsMessengerCallbackEXT> DebugCallback;
+    GLFWwindow* Window;
+
+    GpuManagerSpec() = delete;
+    GpuManagerSpec(const char* const app_name, const bool enable_validation, const std::optional<PFN_vkDebugUtilsMessengerCallbackEXT>& debug_callback, GLFWwindow* const window)
+        : AppName(app_name)
+        , EnableValidation(enable_validation)
+        , DebugCallback(debug_callback)
+        , Window(window)
+    {
+    }
+};
+
+struct ResourcesBundle {
+    QueueBundle GraphicsQueue {};
+    SwapchainBundle Swapchain {};
+    vk::Device DeviceHandle { nullptr };
+
+    ResourcesBundle(const QueueBundle& queue, SwapchainBundle swapchain, const vk::Device& device_handle)
+        : GraphicsQueue(queue)
+        , Swapchain(std::move(swapchain))
+        , DeviceHandle(device_handle)
+    {
+    }
 };
 
 class GpuManager {
 public:
     GpuManager() { fmt::println("Gpu manager created"); }
 
+    void destroy_swapchain();
     void destroy()
     {
-        fmt::println("Gpu manager destructor");
+        fmt::println("GpuManager destructor");
         m_DeletionQueue.flush();
-
-        m_Instance = { nullptr };
-        m_DebugMessenger = { nullptr };
-        m_Surface = { nullptr };
-        m_Device = { nullptr };
-        m_PhysicalDevice = { nullptr };
-
-        m_SwapchainBundle = { nullptr };
-        //m_RenderPass = { nullptr };
-
-        m_VertexBuffer = {};
-
         m_Initialized = false;
     }
 
-    const SwapchainBundle& init(const GpuManagerSpec& spec);
-    const SwapchainBundle& recreate_swapchain(const SwapchainSpec& spec);
+    ResourcesBundle init(const GpuManagerSpec& spec);
     void cleanup_swapchain();
-    [[nodiscard]] QueueBundle get_queue(vkb::QueueType queue_type, bool dedicated) const;
-    // TODO review
-    std::expected<vk::Buffer, const char*> create_vertex_buffer(const std::vector<Vertex>& vertices);
 
     vk::Device& device() { return m_Device; }
-    //[[nodiscard]] vk::RenderPass render_pass() const { return m_RenderPass; }
 
 private:
     bool m_Initialized { false };
-
     DeletionQueue m_DeletionQueue;
 
-    vkb::Instance m_VkbInstance;
+    // Core
     vk::Instance m_Instance { nullptr };
     vk::DebugUtilsMessengerEXT m_DebugMessenger { nullptr };
-
     vk::SurfaceKHR m_Surface { nullptr };
-
-    vkb::Device m_VkbDevice;
     vk::Device m_Device { nullptr };
     vk::PhysicalDevice m_PhysicalDevice { nullptr };
-
     VmaAllocator m_Allocator {};
+    vk::Extent2D m_WindowExtent;
 
     SwapchainBundle m_SwapchainBundle;
-    DeletionQueue m_SwapchainDeletionQueue;
-    //vk::RenderPass m_RenderPass;
+    // DeletionQueue m_SwapchainDeletionQueue;
 
-    Buffer m_VertexBuffer {};
-
-    void init_instance(const InstanceSpec& spec);
-    void create_surface(GLFWwindow* window);
-    void init_device(const DeviceSpec& spec);
-    void init_allocator();
-
-    void create_swapchain(const SwapchainSpec& spec);
-    //void create_render_pass();
-    //void create_framebuffers();
+    void create_swapchain(uint32_t width, uint32_t height);
+    void init_swapchain();
 };
 
 }

@@ -9,7 +9,7 @@ constexpr bool enable_validation_layers = true;
 bool Engine::init(const uint32_t width, const uint32_t height)
 {
     if (m_IsInitialized) {
-        LOG_ERROR("Graphics Manager already initialized.");
+        LOG_ERROR("Engine already init");
         return false;
     }
 
@@ -17,14 +17,6 @@ bool Engine::init(const uint32_t width, const uint32_t height)
         return false;
 
     init_vulkan();
-
-    const auto res = m_GpuManager.create_vertex_buffer(vertices);
-
-    if (!res.has_value()) {
-        LOG_ERROR("{}", res.error());
-    }
-
-    m_VertexBufferHandle = res.value();
 
     if (!init_commands()) {
         LOG_ERROR("Failed to initialize command structures");
@@ -40,13 +32,13 @@ bool Engine::init(const uint32_t width, const uint32_t height)
     return true;
 }
 
-static void framebuffer_resize_callback(GLFWwindow* window, const int width, const int height)
-{
-    (void)width;
-    (void)height;
-    const auto engine = static_cast<Engine*>(glfwGetWindowUserPointer(window));
-    engine->m_FramebufferResized = true;
-}
+//static void framebuffer_resize_callback(GLFWwindow* window, const int width, const int height)
+//{
+//    (void)width;
+//    (void)height;
+//    const auto engine = static_cast<Engine*>(glfwGetWindowUserPointer(window));
+//    engine->m_FramebufferResized = true;
+//}
 
 bool Engine::init_window(const uint32_t width, const uint32_t height)
 {
@@ -56,6 +48,7 @@ bool Engine::init_window(const uint32_t width, const uint32_t height)
     }
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     m_Window = glfwCreateWindow(
         static_cast<int32_t>(width),
         static_cast<int32_t>(height), "Minecraft", nullptr, nullptr);
@@ -66,60 +59,45 @@ bool Engine::init_window(const uint32_t width, const uint32_t height)
     }
 
     glfwSetWindowUserPointer(m_Window, this);
-    glfwSetFramebufferSizeCallback(m_Window, framebuffer_resize_callback);
+    //glfwSetFramebufferSizeCallback(m_Window, framebuffer_resize_callback);
     return true;
 }
 
 void Engine::init_vulkan()
 {
-    const InstanceSpec instance_spec {
+    const GpuManagerSpec spec {
         "Minecraft",
         true,
         Logger::debug_callback,
-        {}
+        m_Window
     };
 
-    const DeviceSpec device_spec {
-        false,
-        false
-    };
+    m_ResourcesBundle = m_GpuManager.init(spec);
 
-    const GpuManagerSpec spec {
-        instance_spec,
-        device_spec,
-        get_default_swapchain_spec()
-    };
-
-    m_SwapchainBundle = m_GpuManager.init(spec);
-
-    m_MainDeletionQueue.push_function("Gpu Manager", [&] {
+    m_MainDeletionQueue.push_function("GpuManager", [&] {
         m_GpuManager.destroy();
     });
-
-    m_Device = m_GpuManager.device();
-
-    m_GraphicsQueue = m_GpuManager.get_queue(vkb::QueueType::graphics, false);
 }
 
-static std::vector<char> read_file(const std::string& filepath)
-{
-    // ate starts reading at the end of file
-    std::ifstream file(filepath, std::ios::ate | std::ios::binary);
-
-    if (!file.is_open()) {
-        fmt::println(std::cerr, "Unable to open shader file: {}", filepath);
-    }
-
-    const std::streamsize file_size = file.tellg();
-    std::vector<char> buffer;
-    buffer.resize(file_size);
-
-    file.seekg(0); // return at beginning of file
-    file.read(buffer.data(), file_size);
-
-    file.close();
-    return buffer;
-}
+//static std::vector<char> read_file(const std::string& filepath)
+//{
+//    // ate starts reading at the end of file
+//    std::ifstream file(filepath, std::ios::ate | std::ios::binary);
+//
+//    if (!file.is_open()) {
+//        fmt::println(std::cerr, "Unable to open shader file: {}", filepath);
+//    }
+//
+//    const std::streamsize file_size = file.tellg();
+//    std::vector<char> buffer;
+//    buffer.resize(file_size);
+//
+//    file.seekg(0); // return at beginning of file
+//    file.read(buffer.data(), file_size);
+//
+//    file.close();
+//    return buffer;
+//}
 
 //bool Engine::create_graphics_pipeline()
 //{
@@ -277,15 +255,15 @@ static std::vector<char> read_file(const std::string& filepath)
 bool Engine::init_commands()
 {
     constexpr auto flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer;
-    const auto pool_info = vk::CommandPoolCreateInfo(flags, m_GraphicsQueue.FamilyIndex);
+    const auto pool_info = vk::CommandPoolCreateInfo(flags, m_ResourcesBundle.GraphicsQueue.FamilyIndex);
 
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        VK_CHECK(m_Device.createCommandPool(&pool_info, nullptr, &m_Frames[i].CommandPool));
+        VK_CHECK(m_ResourcesBundle.DeviceHandle.createCommandPool(&pool_info, nullptr, &m_Frames[i].CommandPool));
 
         const auto allocate_info = vk::CommandBufferAllocateInfo(
             m_Frames[i].CommandPool, vk::CommandBufferLevel::ePrimary, 1);
 
-        VK_CHECK(m_Device.allocateCommandBuffers(&allocate_info, &m_Frames[i].CommandBuffer));
+        VK_CHECK(m_ResourcesBundle.DeviceHandle.allocateCommandBuffers(&allocate_info, &m_Frames[i].CommandBuffer));
     }
 
     return true;
@@ -299,9 +277,9 @@ bool Engine::create_sync_objects()
     };
 
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        VK_CHECK(m_Device.createFence(&fence_create_info, nullptr, &m_Frames[i].RenderFence));
-        VK_CHECK(m_Device.createSemaphore(&semaphore_create_info, nullptr, &m_Frames[i].SwapChainSemaphore));
-        VK_CHECK(m_Device.createSemaphore(&semaphore_create_info, nullptr, &m_Frames[i].RenderSemaphore));
+        VK_CHECK(m_ResourcesBundle.DeviceHandle.createFence(&fence_create_info, nullptr, &m_Frames[i].RenderFence));
+        VK_CHECK(m_ResourcesBundle.DeviceHandle.createSemaphore(&semaphore_create_info, nullptr, &m_Frames[i].SwapChainSemaphore));
+        VK_CHECK(m_ResourcesBundle.DeviceHandle.createSemaphore(&semaphore_create_info, nullptr, &m_Frames[i].RenderSemaphore));
     }
 
     return true;
@@ -358,76 +336,46 @@ bool Engine::record_command_buffer(const vk::CommandBuffer& cmd, const uint32_t 
 
     VK_CHECK(cmd.begin(create_info));
 
-    transition_image(cmd, m_SwapchainBundle.Images[image_index],
+    //m_SwapchainBundle.DrawExtent =
+
+    transition_image(cmd, m_ResourcesBundle.Swapchain.Images[image_index],
         vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral);
 
     constexpr vk::ClearColorValue clear_value = { 0.0f, 1.0f, 0.0f, 1.0f };
     const vk::ImageSubresourceRange clear_range = image_subresource_range(vk::ImageAspectFlagBits::eColor);
 
-    cmd.clearColorImage(m_SwapchainBundle.Images[image_index],
+    cmd.clearColorImage(m_ResourcesBundle.Swapchain.Images[image_index],
         vk::ImageLayout::eGeneral, &clear_value, 1, &clear_range);
 
-    transition_image(cmd, m_SwapchainBundle.Images[image_index],
+    transition_image(cmd, m_ResourcesBundle.Swapchain.Images[image_index],
         vk::ImageLayout::eGeneral, vk::ImageLayout::ePresentSrcKHR);
 
     VK_CHECK(cmd.end());
 
     return true;
-
-    // const vk::Rect2D scissor({ 0, 0 }, m_SwapchainBundle.Extent);
-    //
-    //
-    //
-    // const vk::RenderPassBeginInfo render_pass_info {
-    //    m_GpuManager.render_pass(),
-    //    m_SwapchainBundle.Framebuffers[image_index],
-    //    scissor,
-    //    1, &clear_color
-    //};
-    //
-    // cmd.beginRenderPass(render_pass_info, vk::SubpassContents::eInline);
-    // cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, m_Pipeline);
-    //
-    //// TODO Vertex Buffer things
-    // const vk::Buffer vertexBuffers[] = { m_VertexBufferHandle };
-    //// ReSharper disable once CppRedundantZeroInitializerInAggregateInitialization
-    // constexpr vk::DeviceSize offsets[] = { 0 };
-    //
-    // cmd.bindVertexBuffers(0, 1, vertexBuffers, offsets);
-    //
-    //// Scissor and viewport are bound here because are marked as dynamic on pipeline creation
-    // cmd.setScissor(0, 1, &scissor);
-    //
-    // const vk::Viewport viewport(0.0f, 0.0f,
-    //    static_cast<float>(m_SwapchainBundle.Extent.width),
-    //    static_cast<float>(m_SwapchainBundle.Extent.height),
-    //    0.0f, 1.0f);
-    // cmd.setViewport(0, 1, &viewport);
-    //
-    // cmd.draw(vertices.size(), 1, 0, 0);
-    //
-    // cmd.endRenderPass();
 }
 
 bool Engine::draw_frame()
 {
-    VK_CHECK(m_Device.waitForFences(1, &get_current_frame().RenderFence, vk::True, UINT64_MAX));
+    VK_CHECK(m_ResourcesBundle.DeviceHandle.waitForFences(1, &get_current_frame().RenderFence, vk::True, UINT64_MAX));
+
+    get_current_frame().FrameDeletionQueue.flush();
 
     uint32_t image_index;
-    vk::Result result = m_Device.acquireNextImageKHR(
-        m_SwapchainBundle.Swapchain, UINT64_MAX, get_current_frame().SwapChainSemaphore, VK_NULL_HANDLE, &image_index);
+    vk::Result result = m_ResourcesBundle.DeviceHandle.acquireNextImageKHR(
+        m_ResourcesBundle.Swapchain.Handle, UINT64_MAX, get_current_frame().SwapChainSemaphore, VK_NULL_HANDLE, &image_index);
 
-    if (result == vk::Result::eErrorOutOfDateKHR) {
-        m_SwapchainBundle = m_GpuManager.recreate_swapchain(get_default_swapchain_spec());
-        return true;
-    }
+    //if (result == vk::Result::eErrorOutOfDateKHR) {
+    //    m_ResourcesBundle.Swapchain = m_GpuManager.recreate_swapchain(get_default_swapchain_spec());
+    //    return true;
+    //}
 
     if (result != vk::Result::eSuccess && result != vk::Result::eSuboptimalKHR) {
         LOG_ERROR("Failed to acquire swap chain image");
         return false;
     }
 
-    VK_CHECK(m_Device.resetFences(1, &get_current_frame().RenderFence));
+    VK_CHECK(m_ResourcesBundle.DeviceHandle.resetFences(1, &get_current_frame().RenderFence));
 
     const vk::CommandBuffer& cmd = get_current_frame().CommandBuffer;
     VK_CHECK(cmd.reset());
@@ -458,21 +406,21 @@ bool Engine::draw_frame()
         1, &signal_info
     };
 
-    VK_CHECK(m_GraphicsQueue.Queue.submit2(1, &submit_info, get_current_frame().RenderFence));
+    VK_CHECK(m_ResourcesBundle.GraphicsQueue.Queue.submit2(1, &submit_info, get_current_frame().RenderFence));
 
     const vk::PresentInfoKHR present_info {
         1,
         &get_current_frame().RenderSemaphore,
         1,
-        &m_SwapchainBundle.Swapchain,
+        &m_ResourcesBundle.Swapchain.Handle,
         &image_index,
     };
 
-    result = m_GraphicsQueue.Queue.presentKHR(present_info);
+    result = m_ResourcesBundle.GraphicsQueue.Queue.presentKHR(present_info);
 
     if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR || m_FramebufferResized) {
-        m_FramebufferResized = false;
-        m_SwapchainBundle = m_GpuManager.recreate_swapchain(get_default_swapchain_spec());
+        //m_FramebufferResized = false;
+        //m_SwapchainBundle = m_GpuManager.recreate_swapchain(get_default_swapchain_spec());
     } else if (result != vk::Result::eSuccess) {
         LOG_ERROR("failed to present swap chain image!");
         return false;
@@ -496,27 +444,28 @@ bool Engine::run()
         m_Running = !glfwWindowShouldClose(m_Window);
         // m_Running = false;
     }
-    VK_CHECK(m_Device.waitIdle());
+    VK_CHECK(m_ResourcesBundle.DeviceHandle.waitIdle());
     LOG("Engine stopped");
     return true;
 }
 
 Engine::~Engine()
 {
-    m_GpuManager.cleanup_swapchain();
-
     // TODO incorporate in dequeue
     if (m_Frames[0].CommandPool) {
         // Sync Objects
         for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-            m_Device.destroyCommandPool(m_Frames[i].CommandPool);
+            m_ResourcesBundle.DeviceHandle.destroyCommandPool(m_Frames[i].CommandPool);
 
-            m_Device.destroyFence(m_Frames[i].RenderFence);
-            m_Device.destroySemaphore(m_Frames[i].RenderSemaphore);
-            m_Device.destroySemaphore(m_Frames[i].SwapChainSemaphore);
+            m_ResourcesBundle.DeviceHandle.destroyFence(m_Frames[i].RenderFence);
+            m_ResourcesBundle.DeviceHandle.destroySemaphore(m_Frames[i].RenderSemaphore);
+            m_ResourcesBundle.DeviceHandle.destroySemaphore(m_Frames[i].SwapChainSemaphore);
+
+            m_Frames[i].FrameDeletionQueue.flush();
         }
     }
 
+    m_GpuManager.destroy_swapchain();
     m_MainDeletionQueue.flush();
 
     glfwDestroyWindow(m_Window);

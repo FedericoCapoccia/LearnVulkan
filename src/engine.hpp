@@ -2,8 +2,6 @@
 
 #include "gpu_manager.hpp"
 
-#include <vk_mem_alloc.h>
-
 namespace Minecraft::VkEngine {
 
 struct FrameData {
@@ -35,31 +33,15 @@ private:
 
     DeletionQueue m_MainDeletionQueue;
 
-    [[nodiscard]] SwapchainSpec get_default_swapchain_spec() const
-    {
-        return SwapchainSpec {
-            m_Window,
-            { vk::Format::eB8G8R8A8Unorm, vk::ColorSpaceKHR::eSrgbNonlinear },
-            vk::PresentModeKHR::eFifo,
-            vk::ImageUsageFlagBits::eTransferDst,
-            vk::CompositeAlphaFlagBitsKHR::eOpaque
-        };
-    }
-
     GLFWwindow* m_Window { nullptr };
     GpuManager m_GpuManager {};
+    ResourcesBundle m_ResourcesBundle { {}, {}, {}};
 
-    vk::Device m_Device { nullptr };
-    QueueBundle m_GraphicsQueue {};
-
-    SwapchainBundle m_SwapchainBundle;
-
+    // Frame stuff
     int m_FrameNumber { 0 };
     static constexpr int MAX_FRAMES_IN_FLIGHT = 2;
     std::array<FrameData, MAX_FRAMES_IN_FLIGHT> m_Frames;
     FrameData& get_current_frame() { return m_Frames[m_FrameNumber % MAX_FRAMES_IN_FLIGHT]; }
-
-    vk::Buffer m_VertexBufferHandle {};
 
     [[nodiscard]] bool init_window(uint32_t width, uint32_t height);
     void init_vulkan();
