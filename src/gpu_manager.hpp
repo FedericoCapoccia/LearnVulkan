@@ -94,13 +94,13 @@ private:
     DeletionQueue m_DeletionQueue;
 
     // Core
+    vk::Extent2D m_WindowExtent;
     vk::Instance m_Instance { nullptr };
     vk::DebugUtilsMessengerEXT m_DebugMessenger { nullptr };
     vk::SurfaceKHR m_Surface { nullptr };
     vk::Device m_Device { nullptr };
     vk::PhysicalDevice m_PhysicalDevice { nullptr };
     VmaAllocator m_Allocator {};
-    vk::Extent2D m_WindowExtent;
 
     SwapchainBundle m_SwapchainBundle;
     // DeletionQueue m_SwapchainDeletionQueue;
