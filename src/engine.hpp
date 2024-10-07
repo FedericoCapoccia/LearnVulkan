@@ -35,7 +35,9 @@ private:
 
     GLFWwindow* m_Window { nullptr };
     GpuManager m_GpuManager {};
-    ResourcesBundle m_ResourcesBundle { {}, {}, {}};
+    vk::Device m_Device { nullptr };
+    QueueBundle m_GraphicsQueue {};
+    SwapchainBundle m_SwapchainBundle {};
 
     // Frame stuff
     int m_FrameNumber { 0 };
