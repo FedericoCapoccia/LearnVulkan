@@ -21,13 +21,6 @@ const std::vector<Vertex> vertices = {
     { { -0.5f, 0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f } }
 };
 
-// TODO Abstractions
-/*
- * Application -> main loop and window, makes drawcall on engine
- * Engine ->
- * VulkanContext -> m_Device, m_Swapchain
- */
-
 class Engine {
 public:
     ~Engine();

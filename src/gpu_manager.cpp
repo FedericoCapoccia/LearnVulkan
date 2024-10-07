@@ -151,6 +151,7 @@ void GpuManager::init_device(const DeviceSpec& spec)
         selector.require_dedicated_transfer_queue();
     }
 
+    // TODO fix this so it doesn't crash if dedicated queue are requested and not valid smh...
     const vkb::PhysicalDevice vkb_physical_device = selector.select().value();
 
     const vkb::DeviceBuilder device_builder { vkb_physical_device };

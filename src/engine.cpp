@@ -48,8 +48,10 @@ bool Engine::init(const uint32_t width, const uint32_t height)
     return true;
 }
 
-static void framebuffer_resize_callback(GLFWwindow* window, int width, int height)
+static void framebuffer_resize_callback(GLFWwindow* window, const int width, const int height)
 {
+    (void)width;
+    (void)height;
     const auto engine = static_cast<Engine*>(glfwGetWindowUserPointer(window));
     engine->m_FramebufferResized = true;
 }

@@ -127,20 +127,32 @@ public:
     {
         fmt::println("Gpu manager destructor");
         m_DeletionQueue.flush();
+
+        m_Instance = { nullptr };
+        m_DebugMessenger = { nullptr };
+        m_Surface = { nullptr };
+        m_Device = { nullptr };
+        m_PhysicalDevice = { nullptr };
+
+        m_SwapchainBundle = { nullptr };
+        m_RenderPass = { nullptr };
+
+        m_VertexBuffer = {};
+
+        m_Initialized = false;
     }
 
     const SwapchainBundle& init(const GpuManagerSpec& spec);
     const SwapchainBundle& recreate_swapchain(const SwapchainSpec& spec);
     void cleanup_swapchain();
     [[nodiscard]] QueueBundle get_queue(vkb::QueueType queue_type, bool dedicated) const;
-    //TODO review
+    // TODO review
     std::expected<vk::Buffer, const char*> create_vertex_buffer(const std::vector<Vertex>& vertices);
 
     vk::Device& device() { return m_Device; }
     [[nodiscard]] vk::RenderPass render_pass() const { return m_RenderPass; }
 
 private:
-
     bool m_Initialized { false };
 
     DeletionQueue m_DeletionQueue;
