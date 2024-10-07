@@ -6,7 +6,6 @@ namespace Minecraft::VkEngine {
 
 struct InstanceSpec {
     const char* AppName;
-    std::array<uint32_t, 3> ApiVersion;
     bool EnableValidationLayers;
     /*
      * Ignored if validation layers not enabled
@@ -18,12 +17,10 @@ struct InstanceSpec {
     InstanceSpec() = delete;
     InstanceSpec(
         const char* app_name,
-        const std::array<uint32_t, 3>& api_version,
         const bool enable_validation_layers,
         const std::optional<PFN_vkDebugUtilsMessengerCallbackEXT>& debug_callback,
         const std::vector<const char*>& extensions)
         : AppName(app_name)
-        , ApiVersion(api_version)
         , EnableValidationLayers(enable_validation_layers)
         , DebugCallback(debug_callback)
         , Extensions(extensions)
@@ -32,17 +29,14 @@ struct InstanceSpec {
 };
 
 struct DeviceSpec {
-    std::array<uint32_t, 2> ApiVersion;
     bool RequireDedicatedComputeQueue;
     bool RequireDedicatedTransferQueue;
 
     DeviceSpec() = delete;
     DeviceSpec(
-        const std::array<uint32_t, 2>& api_version,
         const bool require_dedicated_compute_queue,
         const bool require_dedicated_transfer_queue)
-        : ApiVersion(api_version)
-        , RequireDedicatedComputeQueue(require_dedicated_compute_queue)
+        : RequireDedicatedComputeQueue(require_dedicated_compute_queue)
         , RequireDedicatedTransferQueue(require_dedicated_transfer_queue)
     {
     }

@@ -2,9 +2,6 @@
 #include "gpu_manager.hpp"
 #include "logger.hpp"
 
-// Important for VMA, better to sync with GpuManager::InstanceSpec::ApiVersion
-#define VMA_VULKAN_VERSION 1003000
-
 namespace Minecraft::VkEngine {
 
 constexpr bool enable_validation_layers = true;
@@ -82,14 +79,12 @@ void Engine::init_vulkan()
 {
     const InstanceSpec instance_spec {
         "Minecraft",
-        { 1, 3, 0 },
         true,
         Logger::debug_callback,
         {}
     };
 
     const DeviceSpec device_spec {
-        { 1, 3 },
         false,
         false
     };

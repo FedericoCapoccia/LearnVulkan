@@ -1,5 +1,6 @@
 #include "gpu_manager.hpp"
 
+#define VMA_VULKAN_VERSION 1003000
 #define VMA_IMPLEMENTATION
 #include <vk_mem_alloc.h>
 
@@ -52,7 +53,7 @@ std::expected<vk::Buffer, const char*> GpuManager::create_vertex_buffer(const st
 
     vmaUnmapMemory(m_Allocator, m_VertexBuffer.Allocation);
 
-    m_DeletionQueue.push_function("Vertex Buffer",[&] {
+    m_DeletionQueue.push_function("Vertex Buffer", [&] {
         vmaDestroyBuffer(m_Allocator, m_VertexBuffer.Handle, m_VertexBuffer.Allocation);
     });
 
@@ -97,7 +98,7 @@ void GpuManager::init_instance(const InstanceSpec& spec)
     vkb::InstanceBuilder builder;
     builder
         .set_app_name(spec.AppName)
-        .require_api_version(spec.ApiVersion[0], spec.ApiVersion[1], spec.ApiVersion[2])
+        .require_api_version(1, 3, 0)
         .enable_extensions(spec.Extensions);
 
     if (spec.EnableValidationLayers) {
@@ -137,11 +138,21 @@ void GpuManager::create_surface(GLFWwindow* window)
 
 void GpuManager::init_device(const DeviceSpec& spec)
 {
+    vk::PhysicalDeviceVulkan13Features features13;
+    features13.dynamicRendering = true;
+    features13.synchronization2 = true;
+
+    vk::PhysicalDeviceVulkan12Features features12;
+    features12.bufferDeviceAddress = true;
+    features12.descriptorIndexing = true;
+
     vkb::PhysicalDeviceSelector selector { m_VkbInstance };
     selector
         .set_surface(m_Surface)
-        .set_minimum_version(spec.ApiVersion[0], spec.ApiVersion[1])
-        .require_present();
+        .set_minimum_version(1, 3)
+        .require_present()
+        .set_required_features_13(features13)
+        .set_required_features_12(features12);
 
     if (spec.RequireDedicatedComputeQueue) {
         selector.require_dedicated_compute_queue();
