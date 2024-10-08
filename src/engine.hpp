@@ -30,7 +30,7 @@ public:
 
     [[nodiscard]] bool init(uint32_t width, uint32_t height);
     [[nodiscard]] bool run();
-    bool m_ResizeRequested = false;
+    bool ResizeRequested = false;
 
 private:
     bool m_IsInitialized = false;
@@ -42,7 +42,10 @@ private:
     GpuManager m_GpuManager {};
     vk::Device m_Device { nullptr };
     DrawImageBundle m_DrawImageBundle {};
+
+    // Resizing
     vk::Extent2D m_DrawExtent {};
+    float m_RenderScale = 1.0f;
 
     // Pipelines
     PipelineBundle m_TrianglePipeline {};

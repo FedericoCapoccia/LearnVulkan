@@ -183,8 +183,7 @@ vk::Result GpuManager::present(const uint32_t semaphores_count, vk::Semaphore* s
 
     const vk::Result res = m_GraphicsQueue.Queue.presentKHR(present_info);
     if (res == vk::Result::eErrorOutOfDateKHR || res == vk::Result::eSuboptimalKHR) {
-        // TODO rebuild swapchain
-        LOG("Palle2");
+        resize_swapchain();
         return vk::Result::eSuccess;
     }
 
@@ -260,13 +259,30 @@ vk::Result GpuManager::reset_fence(const vk::Fence fence) const
 
 #pragma region Swapchain
 
+void GpuManager::request_resize(const uint32_t width, const uint32_t height)
+{
+    wait_idle();
+    m_WindowExtent.width = width;
+    m_WindowExtent.height = height;
+
+    resize_swapchain();
+}
+
+void GpuManager::resize_swapchain()
+{
+    wait_idle();
+    destroy_swapchain();
+
+    create_swapchain();
+}
+
 std::expected<vk::Image, vk::Result> GpuManager::get_next_swapchain_image(const vk::Semaphore swapchain_semaphore, const uint64_t timeout)
 {
-    if (const vk::Result res = m_Device.acquireNextImageKHR(m_SwapchainBundle.Handle, timeout, swapchain_semaphore,
-            VK_NULL_HANDLE, &m_CurrentSwapchainImageIndex);
-        res == vk::Result::eErrorOutOfDateKHR) {
-        // TODO rebuild swapchain
-        LOG("Palle1");
+    const vk::Result res = m_Device.acquireNextImageKHR(m_SwapchainBundle.Handle, timeout, swapchain_semaphore,
+        VK_NULL_HANDLE, &m_CurrentSwapchainImageIndex);
+
+    if (res == vk::Result::eErrorOutOfDateKHR) {
+        resize_swapchain();
     } else if (res != vk::Result::eSuccess && res != vk::Result::eSuboptimalKHR) {
         m_CurrentSwapchainImageIndex = -1;
         return std::unexpected(res);
@@ -285,7 +301,7 @@ void GpuManager::destroy_swapchain()
     }
 }
 
-void GpuManager::create_swapchain(const uint32_t width, const uint32_t height)
+void GpuManager::create_swapchain()
 {
     vkb::SwapchainBuilder builder(m_PhysicalDevice, m_Device, m_Surface);
 
@@ -294,7 +310,7 @@ void GpuManager::create_swapchain(const uint32_t width, const uint32_t height)
     builder
         .set_desired_format(vk::SurfaceFormatKHR { m_SwapchainBundle.ImageFormat, vk::ColorSpaceKHR::eSrgbNonlinear })
         .set_desired_present_mode(static_cast<VkPresentModeKHR>(vk::PresentModeKHR::eFifo))
-        .set_desired_extent(width, height)
+        .set_desired_extent(m_WindowExtent.width, m_WindowExtent.height)
         .add_image_usage_flags(static_cast<VkImageUsageFlags>(vk::ImageUsageFlagBits::eTransferDst))
         .set_composite_alpha_flags(static_cast<VkCompositeAlphaFlagBitsKHR>(vk::CompositeAlphaFlagBitsKHR::eOpaque));
 
@@ -308,12 +324,10 @@ void GpuManager::create_swapchain(const uint32_t width, const uint32_t height)
 
 void GpuManager::init_swapchain()
 {
-    create_swapchain(m_WindowExtent.width, m_WindowExtent.height);
-
-    // TODO chapter 2 - Image allocations & https://github.com/vblanco20-1/vulkan-guide/blob/all-chapters-2/chapter-2/vk_engine.cpp#L33
-    const vk::Extent3D draw_image_extent {
-        m_WindowExtent.width,
-        m_WindowExtent.height,
+    create_swapchain();
+    constexpr vk::Extent3D draw_image_extent { // TODO get maximum system supported resolution
+        7680,
+        4320,
         1
     };
 

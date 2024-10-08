@@ -46,13 +46,11 @@ bool Engine::init(const uint32_t width, const uint32_t height)
     return true;
 }
 
- static void framebuffer_resize_callback(GLFWwindow* window, const int width, const int height)
+static void framebuffer_resize_callback(GLFWwindow* window, [[maybe_unused]] const int width, [[maybe_unused]] const int height)
 {
-     (void)width;
-     (void)height;
-     const auto engine = static_cast<Engine*>(glfwGetWindowUserPointer(window));
-     engine->m_ResizeRequested = true;
- }
+    const auto engine = static_cast<Engine*>(glfwGetWindowUserPointer(window));
+    engine->ResizeRequested = true;
+}
 
 bool Engine::init_window(const uint32_t width, const uint32_t height)
 {
@@ -198,7 +196,6 @@ bool Engine::create_sync_objects()
         }
         m_Frames[i].SwapChainSemaphore = semaphore1_res.value();
 
-
         const auto semaphore2_res = m_GpuManager.create_semaphore(semaphore_flags);
         if (!semaphore2_res.has_value()) {
             VK_CHECK(semaphore2_res.error());
@@ -257,8 +254,8 @@ bool Engine::record_command_buffer(const vk::CommandBuffer cmd, const vk::Image 
         nullptr
     };
 
-    m_DrawExtent.width = m_DrawImageBundle.Extent.width;
-    m_DrawExtent.height = m_DrawImageBundle.Extent.height;
+    m_DrawExtent.width = std::min(swapchain_extent.width, m_DrawImageBundle.Extent.width) * m_RenderScale;
+    m_DrawExtent.height = std::min(swapchain_extent.height, m_DrawImageBundle.Extent.height) * m_RenderScale;
 
     VK_CHECK(cmd.begin(create_info));
 
@@ -341,6 +338,14 @@ bool Engine::run()
     m_Running = true;
     LOG("Engine started");
     while (m_Running) {
+
+        if (ResizeRequested) {
+            int width, height;
+            glfwGetFramebufferSize(m_Window, &width, &height);
+            m_GpuManager.request_resize(width, height);
+            ResizeRequested = false;
+        }
+
         glfwPollEvents();
 
         if (!draw_frame()) {

@@ -9,13 +9,13 @@ public:
     ResourcesBundle init(const GpuManagerSpec& spec);
     void destroy();
     void wait_idle() const;
+    void request_resize(uint32_t width, uint32_t height);
 
     // Swapchain
     std::expected<vk::Image, vk::Result> get_next_swapchain_image(vk::Semaphore swapchain_semaphore, uint64_t timeout);
     [[nodiscard]] vk::Extent2D get_swapchain_extent() const { return m_SwapchainBundle.Extent; }
 
     // Queue
-    //[[nodiscard]] uint32_t get_graphics_queue_index() const { return m_GraphicsQueue.FamilyIndex; }
     [[nodiscard]] vk::Result submit_to_queue(const vk::SubmitInfo2& submit_info2, vk::Fence render_fence) const;
     vk::Result present(uint32_t semaphores_count, vk::Semaphore* semaphores);
 
@@ -28,8 +28,6 @@ public:
 
     [[nodiscard]] vk::Result wait_fence(vk::Fence fence, uint64_t timeout) const;
     [[nodiscard]] vk::Result reset_fence(vk::Fence fence) const;
-
-
 
 private:
     bool m_Initialized { false };
@@ -61,9 +59,10 @@ private:
 
     // DeletionQueue m_SwapchainDeletionQueue;
 
-    void create_swapchain(uint32_t width, uint32_t height);
+    void create_swapchain();
     void init_swapchain();
     void destroy_swapchain();
+    void resize_swapchain();
 };
 
 }
