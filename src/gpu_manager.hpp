@@ -7,6 +7,11 @@ class GpuManager {
 public:
     GpuManager() { fmt::println("Gpu manager created"); }
     ResourcesBundle init(const GpuManagerSpec& spec);
+    void wait_idle() const
+    {
+        const auto _ = m_Device.waitIdle();
+        (void)_;
+    }
 
     // Swapchain
     std::expected<vk::Image, vk::Result> get_next_swapchain_image(vk::Semaphore swapchain_semaphore, uint64_t timeout);
@@ -30,19 +35,18 @@ public:
     void destroy()
     {
         fmt::println("GpuManager destructor");
-        const auto _ = m_Device.waitIdle();
-        (void)_;
+        this->wait_idle();
 
         // TODO cleanup pool and sync gates
-        for(const auto& pool : m_CommandPools) {
+        for (const auto& pool : m_CommandPools) {
             m_Device.destroyCommandPool(pool);
         }
 
-        for(const auto& semaphore : m_Semaphores) {
+        for (const auto& semaphore : m_Semaphores) {
             m_Device.destroySemaphore(semaphore);
         }
 
-        for(const auto& fence : m_Fences) {
+        for (const auto& fence : m_Fences) {
             m_Device.destroyFence(fence);
         }
 

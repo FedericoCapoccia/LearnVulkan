@@ -8,6 +8,7 @@ namespace Minecraft::VkEngine {
 
 Engine::~Engine()
 {
+    m_GpuManager.wait_idle();
     m_MainDeletionQueue.flush();
 
     glfwDestroyWindow(m_Window);
@@ -348,7 +349,7 @@ bool Engine::run()
         m_Running = !glfwWindowShouldClose(m_Window);
         // m_Running = false;
     }
-    VK_CHECK(m_Device.waitIdle()); // TODO remove
+
     LOG("Engine stopped");
     return true;
 }
