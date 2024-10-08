@@ -7,6 +7,32 @@
  *  Create pipelines in GpuManager
  */
 
+/*
+ * Notes:
+ * - Init glwf window
+ * - Init GPUManager:
+ * -- Initialize vulkan instance, surface, device, creates swapchain and allocator
+ * - Create a Graphics Pipeline (Input -> Vertex Shader -> Fragment Shader -> Rasterizer) // TODO add vertex and index buffers
+ * - Setup double buffering
+ * -- Request command pool from GPUManager
+ * -- Allocate command buffers
+ * -- Request Semaphores and Fences
+ *
+ * - On each frame grab new swapchain image
+ * - Reset Command Buffer
+ * - Record new command:
+ * -- Setup Allocated Image format for color clearing
+ * -- Draw background with clear color
+ * -- Setup Allocated Image format for geometry drawing
+ * -- Draw geometry
+ * -- Setup Allocated Image format for transfer src
+ * -- Setup Swapchain Image format for transfer dst
+ * -- Copy drawn image to swapchain image
+ * -- end recording
+ * - Send command
+ * - Present swapchain image
+ */
+
 namespace Minecraft::VkEngine {
 
 struct FrameData {

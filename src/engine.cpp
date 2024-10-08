@@ -254,10 +254,12 @@ bool Engine::record_command_buffer(const vk::CommandBuffer cmd, const vk::Image 
         nullptr
     };
 
-    m_DrawExtent.width = std::min(swapchain_extent.width, m_DrawImageBundle.Extent.width) * m_RenderScale;
-    m_DrawExtent.height = std::min(swapchain_extent.height, m_DrawImageBundle.Extent.height) * m_RenderScale;
+    m_DrawExtent.width = static_cast<uint32_t>(static_cast<float>(std::min(swapchain_extent.width, m_DrawImageBundle.Extent.width)) * m_RenderScale);
+    m_DrawExtent.height = static_cast<uint32_t>(static_cast<float>(std::min(swapchain_extent.height, m_DrawImageBundle.Extent.height)) * m_RenderScale);
 
     VK_CHECK(cmd.begin(create_info));
+
+    // TODO look into better layouts
 
     VkUtil::transition_image(cmd, m_DrawImageBundle.Image, vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral);
 
@@ -353,7 +355,6 @@ bool Engine::run()
         }
 
         m_Running = !glfwWindowShouldClose(m_Window);
-        // m_Running = false;
     }
 
     LOG("Engine stopped");
