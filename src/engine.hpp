@@ -44,11 +44,11 @@ struct FrameData {
     vk::Fence RenderFence { nullptr };
 };
 
-const std::vector<Vertex> vertices = {
-    { { 0.0f, -0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
-    { { 0.5f, 0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
-    { { -0.5f, 0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f } }
-};
+//const std::vector<Vertex> vertices = {
+//    { { 0.0f, -0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
+//    { { 0.5f, 0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
+//    { { -0.5f, 0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f } }
+//};
 
 class Engine {
 public:
