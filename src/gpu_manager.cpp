@@ -157,7 +157,6 @@ ResourcesBundle GpuManager::init(const GpuManagerSpec& spec)
         .Format = m_DrawImage.Format
     };
 
-    // TODO remove everything
     return ResourcesBundle {
         m_Device,
         image_bundle
