@@ -304,7 +304,7 @@ void GpuManager::create_swapchain()
 {
     vkb::SwapchainBuilder builder(m_PhysicalDevice, m_Device, m_Surface);
 
-    m_SwapchainBundle.ImageFormat = vk::Format::eB8G8R8A8Unorm;
+    m_SwapchainBundle.ImageFormat = vk::Format::eB8G8R8A8Srgb; // UNORM for non srgb images such as noise maps and normal maps
 
     builder
         .set_desired_format(vk::SurfaceFormatKHR { m_SwapchainBundle.ImageFormat, vk::ColorSpaceKHR::eSrgbNonlinear })
