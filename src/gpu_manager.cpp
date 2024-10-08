@@ -8,104 +8,34 @@
 
 namespace Minecraft::VkEngine {
 
-std::expected<vk::Image, vk::Result> GpuManager::get_next_swapchain_image(const vk::Semaphore swapchain_semaphore, const uint64_t timeout)
+void GpuManager::destroy()
 {
-    if (const vk::Result res = m_Device.acquireNextImageKHR(m_SwapchainBundle.Handle, timeout, swapchain_semaphore,
-            VK_NULL_HANDLE, &m_CurrentSwapchainImageIndex);
-        res == vk::Result::eErrorOutOfDateKHR) {
-        // TODO rebuild swapchain
-    } else if (res != vk::Result::eSuccess && res != vk::Result::eSuboptimalKHR) {
-        m_CurrentSwapchainImageIndex = -1;
-        return std::unexpected(res);
+
+    fmt::println("GpuManager destructor");
+    this->wait_idle();
+
+    // TODO cleanup pool and sync gates
+    for (const auto& pool : m_CommandPools) {
+        m_Device.destroyCommandPool(pool);
     }
 
-    m_CurrentSwapchainImage = m_SwapchainBundle.Images[m_CurrentSwapchainImageIndex];
-    return m_CurrentSwapchainImage;
-}
-
-vk::Result GpuManager::submit_to_queue(const vk::SubmitInfo2& submit_info2, const vk::Fence render_fence) const
-{
-    return m_GraphicsQueue.Queue.submit2(1, &submit_info2, render_fence);
-}
-
-vk::Result GpuManager::present(const uint32_t semaphores_count, vk::Semaphore* semaphores)
-{
-    const vk::PresentInfoKHR present_info {
-        semaphores_count,
-        semaphores,
-        1,
-        &m_SwapchainBundle.Handle,
-        &m_CurrentSwapchainImageIndex,
-    };
-
-    const vk::Result res = m_GraphicsQueue.Queue.presentKHR(present_info);
-    if (res == vk::Result::eErrorOutOfDateKHR || res == vk::Result::eSuboptimalKHR) {
-        // TODO rebuild swapchain
-        return vk::Result::eSuccess;
+    for (const auto& semaphore : m_Semaphores) {
+        m_Device.destroySemaphore(semaphore);
     }
 
-    return res;
-}
-
-std::expected<vk::CommandPool, vk::Result> GpuManager::create_command_pool(const vk::CommandPoolCreateFlags flags)
-{
-    const vk::CommandPoolCreateInfo info { flags, m_GraphicsQueue.FamilyIndex };
-    const auto [res, pool] = m_Device.createCommandPool(info);
-
-    if (res != vk::Result::eSuccess) {
-        return std::unexpected(res);
+    for (const auto& fence : m_Fences) {
+        m_Device.destroyFence(fence);
     }
 
-    m_CommandPools.push_back(pool);
-    return pool;
+    destroy_swapchain();
+    m_DeletionQueue.flush();
+    m_Initialized = false;
 }
 
-std::expected<vk::CommandBuffer, vk::Result> GpuManager::allocate_command_buffer(const vk::CommandPool pool, const vk::CommandBufferLevel level) const
+void GpuManager::wait_idle() const
 {
-    const vk::CommandBufferAllocateInfo info { pool, level, 1 };
-    const auto [res, buffer] = m_Device.allocateCommandBuffers(info);
-
-    if (res != vk::Result::eSuccess) {
-        return std::unexpected(res);
-    }
-
-    return buffer[0];
-}
-
-std::expected<vk::Semaphore, vk::Result> GpuManager::create_semaphore(const vk::SemaphoreCreateFlags flags)
-{
-    const vk::SemaphoreCreateInfo info { flags };
-    const auto [res, semaphore] = m_Device.createSemaphore(info);
-
-    if (res != vk::Result::eSuccess) {
-        return std::unexpected(res);
-    }
-
-    m_Semaphores.push_back(semaphore);
-    return semaphore;
-}
-
-std::expected<vk::Fence, vk::Result> GpuManager::create_fence(const vk::FenceCreateFlags flags)
-{
-    const vk::FenceCreateInfo info { flags };
-    const auto [res, fence] = m_Device.createFence(info);
-
-    if (res != vk::Result::eSuccess) {
-        return std::unexpected(res);
-    }
-
-    m_Fences.push_back(fence);
-    return fence;
-}
-
-vk::Result GpuManager::wait_fence(const vk::Fence fence, const uint64_t timeout) const
-{
-    return m_Device.waitForFences(1, &fence, vk::True, timeout);
-}
-
-vk::Result GpuManager::reset_fence(const vk::Fence fence) const
-{
-    return m_Device.resetFences(1, &fence);
+    const auto _ = m_Device.waitIdle();
+    (void)_;
 }
 
 ResourcesBundle GpuManager::init(const GpuManagerSpec& spec)
@@ -235,6 +165,116 @@ ResourcesBundle GpuManager::init(const GpuManagerSpec& spec)
     };
 }
 
+#pragma region Queue
+
+vk::Result GpuManager::submit_to_queue(const vk::SubmitInfo2& submit_info2, const vk::Fence render_fence) const
+{
+    return m_GraphicsQueue.Queue.submit2(1, &submit_info2, render_fence);
+}
+
+vk::Result GpuManager::present(const uint32_t semaphores_count, vk::Semaphore* semaphores)
+{
+    const vk::PresentInfoKHR present_info {
+        semaphores_count,
+        semaphores,
+        1,
+        &m_SwapchainBundle.Handle,
+        &m_CurrentSwapchainImageIndex,
+    };
+
+    const vk::Result res = m_GraphicsQueue.Queue.presentKHR(present_info);
+    if (res == vk::Result::eErrorOutOfDateKHR || res == vk::Result::eSuboptimalKHR) {
+        // TODO rebuild swapchain
+        return vk::Result::eSuccess;
+    }
+
+    return res;
+}
+
+#pragma endregion
+
+#pragma region SyncStructs
+
+std::expected<vk::CommandPool, vk::Result> GpuManager::create_command_pool(const vk::CommandPoolCreateFlags flags)
+{
+    const vk::CommandPoolCreateInfo info { flags, m_GraphicsQueue.FamilyIndex };
+    const auto [res, pool] = m_Device.createCommandPool(info);
+
+    if (res != vk::Result::eSuccess) {
+        return std::unexpected(res);
+    }
+
+    m_CommandPools.push_back(pool);
+    return pool;
+}
+
+std::expected<vk::CommandBuffer, vk::Result> GpuManager::allocate_command_buffer(const vk::CommandPool pool, const vk::CommandBufferLevel level) const
+{
+    const vk::CommandBufferAllocateInfo info { pool, level, 1 };
+    const auto [res, buffer] = m_Device.allocateCommandBuffers(info);
+
+    if (res != vk::Result::eSuccess) {
+        return std::unexpected(res);
+    }
+
+    return buffer[0];
+}
+
+std::expected<vk::Semaphore, vk::Result> GpuManager::create_semaphore(const vk::SemaphoreCreateFlags flags)
+{
+    const vk::SemaphoreCreateInfo info { flags };
+    const auto [res, semaphore] = m_Device.createSemaphore(info);
+
+    if (res != vk::Result::eSuccess) {
+        return std::unexpected(res);
+    }
+
+    m_Semaphores.push_back(semaphore);
+    return semaphore;
+}
+
+std::expected<vk::Fence, vk::Result> GpuManager::create_fence(const vk::FenceCreateFlags flags)
+{
+    const vk::FenceCreateInfo info { flags };
+    const auto [res, fence] = m_Device.createFence(info);
+
+    if (res != vk::Result::eSuccess) {
+        return std::unexpected(res);
+    }
+
+    m_Fences.push_back(fence);
+    return fence;
+}
+
+vk::Result GpuManager::wait_fence(const vk::Fence fence, const uint64_t timeout) const
+{
+    return m_Device.waitForFences(1, &fence, vk::True, timeout);
+}
+
+vk::Result GpuManager::reset_fence(const vk::Fence fence) const
+{
+    return m_Device.resetFences(1, &fence);
+}
+
+#pragma endregion
+
+#pragma region Swapchain
+
+std::expected<vk::Image, vk::Result> GpuManager::get_next_swapchain_image(const vk::Semaphore swapchain_semaphore, const uint64_t timeout)
+{
+    if (const vk::Result res = m_Device.acquireNextImageKHR(m_SwapchainBundle.Handle, timeout, swapchain_semaphore,
+            VK_NULL_HANDLE, &m_CurrentSwapchainImageIndex);
+        res == vk::Result::eErrorOutOfDateKHR) {
+        // TODO rebuild swapchain
+        } else if (res != vk::Result::eSuccess && res != vk::Result::eSuboptimalKHR) {
+            m_CurrentSwapchainImageIndex = -1;
+            return std::unexpected(res);
+        }
+
+    m_CurrentSwapchainImage = m_SwapchainBundle.Images[m_CurrentSwapchainImageIndex];
+    return m_CurrentSwapchainImage;
+}
+
 void GpuManager::destroy_swapchain()
 {
     m_Device.destroySwapchainKHR(m_SwapchainBundle.Handle);
@@ -307,5 +347,7 @@ void GpuManager::init_swapchain()
         vmaDestroyImage(m_Allocator, m_DrawImage.Image, m_DrawImage.Allocation);
     });
 }
+
+#pragma endregion
 
 }

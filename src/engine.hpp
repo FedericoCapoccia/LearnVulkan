@@ -4,8 +4,6 @@
 
 /*
  * TODO
- *  Create command buffers and sync structures in GpuManager to handle destroy
- *   Return handles to fences and command buffers
  *  Create pipelines in GpuManager
  */
 
