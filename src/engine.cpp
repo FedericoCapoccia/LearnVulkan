@@ -46,13 +46,13 @@ bool Engine::init(const uint32_t width, const uint32_t height)
     return true;
 }
 
-// static void framebuffer_resize_callback(GLFWwindow* window, const int width, const int height)
-//{
-//     (void)width;
-//     (void)height;
-//     const auto engine = static_cast<Engine*>(glfwGetWindowUserPointer(window));
-//     engine->m_FramebufferResized = true;
-// }
+ static void framebuffer_resize_callback(GLFWwindow* window, const int width, const int height)
+{
+     (void)width;
+     (void)height;
+     const auto engine = static_cast<Engine*>(glfwGetWindowUserPointer(window));
+     engine->m_ResizeRequested = true;
+ }
 
 bool Engine::init_window(const uint32_t width, const uint32_t height)
 {
@@ -62,7 +62,8 @@ bool Engine::init_window(const uint32_t width, const uint32_t height)
     }
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    // glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+
     m_Window = glfwCreateWindow(
         static_cast<int32_t>(width),
         static_cast<int32_t>(height), "Minecraft", nullptr, nullptr);
@@ -73,7 +74,7 @@ bool Engine::init_window(const uint32_t width, const uint32_t height)
     }
 
     glfwSetWindowUserPointer(m_Window, this);
-    // glfwSetFramebufferSizeCallback(m_Window, framebuffer_resize_callback);
+    glfwSetFramebufferSizeCallback(m_Window, framebuffer_resize_callback);
     return true;
 }
 

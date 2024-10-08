@@ -14,7 +14,6 @@ void GpuManager::destroy()
     fmt::println("GpuManager destructor");
     this->wait_idle();
 
-    // TODO cleanup pool and sync gates
     for (const auto& pool : m_CommandPools) {
         m_Device.destroyCommandPool(pool);
     }
@@ -185,6 +184,7 @@ vk::Result GpuManager::present(const uint32_t semaphores_count, vk::Semaphore* s
     const vk::Result res = m_GraphicsQueue.Queue.presentKHR(present_info);
     if (res == vk::Result::eErrorOutOfDateKHR || res == vk::Result::eSuboptimalKHR) {
         // TODO rebuild swapchain
+        LOG("Palle2");
         return vk::Result::eSuccess;
     }
 
@@ -266,10 +266,11 @@ std::expected<vk::Image, vk::Result> GpuManager::get_next_swapchain_image(const 
             VK_NULL_HANDLE, &m_CurrentSwapchainImageIndex);
         res == vk::Result::eErrorOutOfDateKHR) {
         // TODO rebuild swapchain
-        } else if (res != vk::Result::eSuccess && res != vk::Result::eSuboptimalKHR) {
-            m_CurrentSwapchainImageIndex = -1;
-            return std::unexpected(res);
-        }
+        LOG("Palle1");
+    } else if (res != vk::Result::eSuccess && res != vk::Result::eSuboptimalKHR) {
+        m_CurrentSwapchainImageIndex = -1;
+        return std::unexpected(res);
+    }
 
     m_CurrentSwapchainImage = m_SwapchainBundle.Images[m_CurrentSwapchainImageIndex];
     return m_CurrentSwapchainImage;

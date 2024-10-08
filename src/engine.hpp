@@ -30,7 +30,7 @@ public:
 
     [[nodiscard]] bool init(uint32_t width, uint32_t height);
     [[nodiscard]] bool run();
-    bool m_FramebufferResized = false;
+    bool m_ResizeRequested = false;
 
 private:
     bool m_IsInitialized = false;
