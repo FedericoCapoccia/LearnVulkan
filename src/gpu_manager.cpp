@@ -1,10 +1,46 @@
 #include "gpu_manager.hpp"
+#include "helper.hpp"
+#include "logger.hpp"
 
 #define VMA_VULKAN_VERSION 1003000
 #define VMA_IMPLEMENTATION
 #include <vk_mem_alloc.h>
 
 namespace Minecraft::VkEngine {
+
+std::expected<vk::Image, vk::Result> GpuManager::get_next_swapchain_image(const vk::Semaphore swapchain_semaphore, const uint64_t timeout)
+{
+    if (const vk::Result res = m_Device.acquireNextImageKHR(m_SwapchainBundle.Handle, timeout, swapchain_semaphore,
+            VK_NULL_HANDLE, &m_CurrentSwapchainImageIndex);
+        res == vk::Result::eErrorOutOfDateKHR) {
+        // TODO rebuild swapchain
+    } else if (res != vk::Result::eSuccess && res != vk::Result::eSuboptimalKHR) {
+        m_CurrentSwapchainImageIndex = -1;
+        return std::unexpected(res);
+    }
+
+    m_CurrentSwapchainImage = m_SwapchainBundle.Images[m_CurrentSwapchainImageIndex];
+    return m_CurrentSwapchainImage;
+}
+
+vk::Result GpuManager::present(uint32_t semaphores_count, vk::Semaphore* semaphores)
+{
+    const vk::PresentInfoKHR present_info {
+        semaphores_count,
+        semaphores,
+        1,
+        &m_SwapchainBundle.Handle,
+        &m_CurrentSwapchainImageIndex,
+    };
+
+    const vk::Result res = m_GraphicsQueue.Queue.presentKHR(present_info);
+    if (res == vk::Result::eErrorOutOfDateKHR || res == vk::Result::eSuboptimalKHR) {
+        // TODO rebuild swapchain
+        return vk::Result::eSuccess;
+    }
+
+    return res;
+}
 
 ResourcesBundle GpuManager::init(const GpuManagerSpec& spec)
 {
@@ -114,15 +150,21 @@ ResourcesBundle GpuManager::init(const GpuManagerSpec& spec)
 
     m_Initialized = true;
 
-    const QueueBundle queue_bundle = {
+    m_GraphicsQueue = {
         vkb_device.get_queue(vkb::QueueType::graphics).value(),
         vkb_device.get_queue_index(vkb::QueueType::graphics).value()
     };
 
+    const DrawImageBundle image_bundle = {
+        .Image = m_DrawImage.Image,
+        .ImageView = m_DrawImage.ImageView,
+        .Extent = m_DrawImage.Extent,
+        .Format = m_DrawImage.Format
+    };
+
     return ResourcesBundle {
-        queue_bundle,
-        m_SwapchainBundle,
-        m_Device
+        m_Device,
+        image_bundle
     };
 }
 
@@ -161,6 +203,42 @@ void GpuManager::init_swapchain()
     create_swapchain(m_WindowExtent.width, m_WindowExtent.height);
 
     // TODO chapter 2 - Image allocations & https://github.com/vblanco20-1/vulkan-guide/blob/all-chapters-2/chapter-2/vk_engine.cpp#L33
+    const vk::Extent3D draw_image_extent {
+        m_WindowExtent.width,
+        m_WindowExtent.height,
+        1
+    };
+
+    m_DrawImage.Format = vk::Format::eR16G16B16A16Sfloat;
+    m_DrawImage.Extent = draw_image_extent;
+
+    vk::ImageUsageFlags draw_image_usage {};
+    draw_image_usage |= vk::ImageUsageFlagBits::eTransferSrc;
+    draw_image_usage |= vk::ImageUsageFlagBits::eTransferDst;
+    draw_image_usage |= vk::ImageUsageFlagBits::eStorage;
+    draw_image_usage |= vk::ImageUsageFlagBits::eColorAttachment;
+
+    // Image Allocation
+    vk::ImageCreateInfo rimg_info = VkInit::image_create_info(m_DrawImage.Format, draw_image_usage, draw_image_extent);
+    VmaAllocationCreateInfo rimg_alloc_info = {};
+    rimg_alloc_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    rimg_alloc_info.requiredFlags = static_cast<VkMemoryPropertyFlags>(vk::MemoryPropertyFlagBits::eDeviceLocal);
+
+    VkImage image_c;
+    vmaCreateImage(m_Allocator, reinterpret_cast<VkImageCreateInfo*>(&rimg_info), &rimg_alloc_info,
+        &image_c, &m_DrawImage.Allocation, nullptr);
+    m_DrawImage.Image = image_c;
+
+    // ImageView Allocation
+    const vk::ImageViewCreateInfo rview_info = VkInit::imageview_create_info(m_DrawImage.Format, m_DrawImage.Image, vk::ImageAspectFlagBits::eColor);
+    if (const vk::Result res = m_Device.createImageView(&rview_info, nullptr, &m_DrawImage.ImageView); res != vk::Result::eSuccess) {
+        LOG_ERROR("Failed to allocate Image View");
+    }
+
+    m_DeletionQueue.push_function("swapchain init", [&] {
+        m_Device.destroyImageView(m_DrawImage.ImageView);
+        vmaDestroyImage(m_Allocator, m_DrawImage.Image, m_DrawImage.Allocation);
+    });
 }
 
 }

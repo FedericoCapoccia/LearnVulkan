@@ -2,91 +2,31 @@
 #include "types.hpp"
 #include <vk_mem_alloc.h>
 
-#include <utility>
-
 namespace Minecraft::VkEngine {
-
-struct QueueBundle {
-    vk::Queue Queue;
-    uint32_t FamilyIndex;
-};
-
-struct SwapchainBundle {
-    vk::SwapchainKHR Handle;
-    vk::Format ImageFormat {};
-    std::vector<VkImage> Images;
-    std::vector<VkImageView> ImageViews;
-    vk::Extent2D Extent {};
-    vk::Extent2D DrawExtent {};
-};
-
-struct Vertex {
-    glm::vec3 pos;
-    glm::vec3 color;
-
-    static vk::VertexInputBindingDescription get_binding_description()
-    {
-        return vk::VertexInputBindingDescription {
-            0, sizeof(Vertex), vk::VertexInputRate::eVertex
-        };
-    }
-
-    static std::array<vk::VertexInputAttributeDescription, 2> get_attribute_descriptions()
-    {
-        return {
-            vk::VertexInputAttributeDescription {
-                0, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, pos) },
-
-            vk::VertexInputAttributeDescription {
-                1, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, color) }
-        };
-    }
-};
-
-struct GpuManagerSpec {
-    const char* AppName { "Default Application Name" };
-    bool EnableValidation { true };
-    std::optional<PFN_vkDebugUtilsMessengerCallbackEXT> DebugCallback;
-    GLFWwindow* Window { nullptr };
-
-    GpuManagerSpec(const char* const app_name, const bool enable_validation, const std::optional<PFN_vkDebugUtilsMessengerCallbackEXT>& debug_callback, GLFWwindow* const window)
-        : AppName(app_name)
-        , EnableValidation(enable_validation)
-        , DebugCallback(debug_callback)
-        , Window(window)
-    {
-    }
-};
-
-struct ResourcesBundle {
-    QueueBundle GraphicsQueue {};
-    SwapchainBundle Swapchain {};
-    vk::Device DeviceHandle { nullptr };
-
-    ResourcesBundle(const QueueBundle& queue, SwapchainBundle swapchain, const vk::Device& device_handle)
-        : GraphicsQueue(queue)
-        , Swapchain(std::move(swapchain))
-        , DeviceHandle(device_handle)
-    {
-    }
-};
 
 class GpuManager {
 public:
     GpuManager() { fmt::println("Gpu manager created"); }
+    ResourcesBundle init(const GpuManagerSpec& spec);
 
-    void destroy_swapchain();
+    [[nodiscard]] uint32_t get_graphics_queue_index() const { return m_GraphicsQueue.FamilyIndex; }
+    std::expected<vk::Image, vk::Result> get_next_swapchain_image(vk::Semaphore swapchain_semaphore, uint64_t timeout);
+    [[nodiscard]] vk::Extent2D get_swapchain_extent() const { return m_SwapchainBundle.Extent; }
+
+    [[nodiscard]] vk::Result submit_to_queue(const vk::SubmitInfo2& submit_info2, const vk::Fence render_fence) const
+    {
+        return m_GraphicsQueue.Queue.submit2(1, &submit_info2, render_fence);
+    };
+
+    vk::Result present(uint32_t semaphores_count, vk::Semaphore* semaphores);
+
     void destroy()
     {
         fmt::println("GpuManager destructor");
+        destroy_swapchain();
         m_DeletionQueue.flush();
         m_Initialized = false;
     }
-
-    ResourcesBundle init(const GpuManagerSpec& spec);
-    void cleanup_swapchain();
-
-    vk::Device& device() { return m_Device; }
 
 private:
     bool m_Initialized { false };
@@ -101,11 +41,21 @@ private:
     vk::PhysicalDevice m_PhysicalDevice { nullptr };
     VmaAllocator m_Allocator {};
 
+    // Queue
+    QueueBundle m_GraphicsQueue {};
+
+    AllocatedImage m_DrawImage {};
+
+    // Swapchain stuff
     SwapchainBundle m_SwapchainBundle;
+    vk::Image m_CurrentSwapchainImage { nullptr };
+    uint32_t m_CurrentSwapchainImageIndex {};
+
     // DeletionQueue m_SwapchainDeletionQueue;
 
     void create_swapchain(uint32_t width, uint32_t height);
     void init_swapchain();
+    void destroy_swapchain();
 };
 
 }
