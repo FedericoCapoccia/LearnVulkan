@@ -1,6 +1,5 @@
 #pragma once
 #include "types.hpp"
-#include <vk_mem_alloc.h>
 
 namespace Minecraft::VkEngine {
 
@@ -9,20 +8,44 @@ public:
     GpuManager() { fmt::println("Gpu manager created"); }
     ResourcesBundle init(const GpuManagerSpec& spec);
 
-    [[nodiscard]] uint32_t get_graphics_queue_index() const { return m_GraphicsQueue.FamilyIndex; }
+    // Swapchain
     std::expected<vk::Image, vk::Result> get_next_swapchain_image(vk::Semaphore swapchain_semaphore, uint64_t timeout);
     [[nodiscard]] vk::Extent2D get_swapchain_extent() const { return m_SwapchainBundle.Extent; }
 
-    [[nodiscard]] vk::Result submit_to_queue(const vk::SubmitInfo2& submit_info2, const vk::Fence render_fence) const
-    {
-        return m_GraphicsQueue.Queue.submit2(1, &submit_info2, render_fence);
-    };
-
+    // Queue
+    //[[nodiscard]] uint32_t get_graphics_queue_index() const { return m_GraphicsQueue.FamilyIndex; }
+    [[nodiscard]] vk::Result submit_to_queue(const vk::SubmitInfo2& submit_info2, vk::Fence render_fence) const;
     vk::Result present(uint32_t semaphores_count, vk::Semaphore* semaphores);
+
+    // Sync Structures
+    [[nodiscard]] std::expected<vk::CommandPool, vk::Result> create_command_pool(vk::CommandPoolCreateFlags flags);
+    // TODO make it support multiple command buffers allocations if needed
+    [[nodiscard]] std::expected<vk::CommandBuffer, vk::Result> allocate_command_buffer(vk::CommandPool pool, vk::CommandBufferLevel level) const;
+    std::expected<vk::Semaphore, vk::Result> create_semaphore(vk::SemaphoreCreateFlags flags);
+    std::expected<vk::Fence, vk::Result> create_fence(vk::FenceCreateFlags flags);
+
+    [[nodiscard]] vk::Result wait_fence(vk::Fence fence, uint64_t timeout) const;
+    [[nodiscard]] vk::Result reset_fence(vk::Fence fence) const;
 
     void destroy()
     {
         fmt::println("GpuManager destructor");
+        const auto _ = m_Device.waitIdle();
+        (void)_;
+
+        // TODO cleanup pool and sync gates
+        for(const auto& pool : m_CommandPools) {
+            m_Device.destroyCommandPool(pool);
+        }
+
+        for(const auto& semaphore : m_Semaphores) {
+            m_Device.destroySemaphore(semaphore);
+        }
+
+        for(const auto& fence : m_Fences) {
+            m_Device.destroyFence(fence);
+        }
+
         destroy_swapchain();
         m_DeletionQueue.flush();
         m_Initialized = false;
@@ -43,6 +66,11 @@ private:
 
     // Queue
     QueueBundle m_GraphicsQueue {};
+
+    // Sync structure handles
+    std::vector<vk::CommandPool> m_CommandPools;
+    std::vector<vk::Semaphore> m_Semaphores;
+    std::vector<vk::Fence> m_Fences;
 
     AllocatedImage m_DrawImage {};
 

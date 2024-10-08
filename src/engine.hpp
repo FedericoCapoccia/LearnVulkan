@@ -14,10 +14,10 @@ namespace Minecraft::VkEngine {
 struct FrameData {
     vk::CommandPool CommandPool { nullptr };
     vk::CommandBuffer CommandBuffer { nullptr };
+
     vk::Semaphore SwapChainSemaphore { nullptr };
     vk::Semaphore RenderSemaphore { nullptr };
     vk::Fence RenderFence { nullptr };
-    DeletionQueue FrameDeletionQueue;
 };
 
 const std::vector<Vertex> vertices = {
@@ -43,7 +43,6 @@ private:
     GLFWwindow* m_Window { nullptr };
     GpuManager m_GpuManager {};
     vk::Device m_Device { nullptr };
-    // QueueBundle m_GraphicsQueue {};
     DrawImageBundle m_DrawImageBundle {};
     vk::Extent2D m_DrawExtent {};
 

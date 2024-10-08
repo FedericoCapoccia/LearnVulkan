@@ -8,20 +8,6 @@ namespace Minecraft::VkEngine {
 
 Engine::~Engine()
 {
-    // TODO incorporate in dequeue
-    if (m_Frames[0].CommandPool) {
-        // Sync Objects
-        for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-            m_Device.destroyCommandPool(m_Frames[i].CommandPool);
-
-            m_Device.destroyFence(m_Frames[i].RenderFence);
-            m_Device.destroySemaphore(m_Frames[i].RenderSemaphore);
-            m_Device.destroySemaphore(m_Frames[i].SwapChainSemaphore);
-
-            m_Frames[i].FrameDeletionQueue.flush();
-        }
-    }
-
     m_MainDeletionQueue.flush();
 
     glfwDestroyWindow(m_Window);
@@ -170,15 +156,22 @@ bool Engine::init_triangle_pipeline()
 bool Engine::init_commands()
 {
     constexpr auto flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer;
-    const auto pool_info = vk::CommandPoolCreateInfo(flags, m_GpuManager.get_graphics_queue_index());
+    constexpr auto level = vk::CommandBufferLevel::ePrimary;
 
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        VK_CHECK(m_Device.createCommandPool(&pool_info, nullptr, &m_Frames[i].CommandPool));
+        // Command pool
+        const auto pres = m_GpuManager.create_command_pool(flags);
+        if (!pres.has_value()) {
+            VK_CHECK(pres.error());
+        }
+        m_Frames[i].CommandPool = pres.value();
 
-        const auto allocate_info = vk::CommandBufferAllocateInfo(
-            m_Frames[i].CommandPool, vk::CommandBufferLevel::ePrimary, 1);
-
-        VK_CHECK(m_Device.allocateCommandBuffers(&allocate_info, &m_Frames[i].CommandBuffer));
+        // Command Buffer
+        const auto bres = m_GpuManager.allocate_command_buffer(m_Frames[i].CommandPool, level);
+        if (!bres.has_value()) {
+            VK_CHECK(bres.error());
+        }
+        m_Frames[i].CommandBuffer = bres.value();
     }
 
     return true;
@@ -186,15 +179,29 @@ bool Engine::init_commands()
 
 bool Engine::create_sync_objects()
 {
-    constexpr vk::SemaphoreCreateInfo semaphore_create_info {};
-    constexpr vk::FenceCreateInfo fence_create_info {
-        vk::FenceCreateFlagBits::eSignaled
-    };
+    constexpr vk::SemaphoreCreateFlags semaphore_flags {};
+    constexpr vk::FenceCreateFlags fence_flags { vk::FenceCreateFlagBits::eSignaled };
 
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        VK_CHECK(m_Device.createFence(&fence_create_info, nullptr, &m_Frames[i].RenderFence));
-        VK_CHECK(m_Device.createSemaphore(&semaphore_create_info, nullptr, &m_Frames[i].SwapChainSemaphore));
-        VK_CHECK(m_Device.createSemaphore(&semaphore_create_info, nullptr, &m_Frames[i].RenderSemaphore));
+
+        const auto fence_res = m_GpuManager.create_fence(fence_flags);
+        if (!fence_res.has_value()) {
+            VK_CHECK(fence_res.error());
+        }
+        m_Frames[i].RenderFence = fence_res.value();
+
+        const auto semaphore1_res = m_GpuManager.create_semaphore(semaphore_flags);
+        if (!semaphore1_res.has_value()) {
+            VK_CHECK(semaphore1_res.error());
+        }
+        m_Frames[i].SwapChainSemaphore = semaphore1_res.value();
+
+
+        const auto semaphore2_res = m_GpuManager.create_semaphore(semaphore_flags);
+        if (!semaphore2_res.has_value()) {
+            VK_CHECK(semaphore2_res.error());
+        }
+        m_Frames[i].RenderSemaphore = semaphore2_res.value();
     }
 
     return true;
@@ -278,22 +285,18 @@ bool Engine::record_command_buffer(const vk::CommandBuffer cmd, const vk::Image 
 
 bool Engine::draw_frame()
 {
-    // TODO GpuManager function
-    VK_CHECK(m_Device.waitForFences(1, &get_current_frame().RenderFence, vk::True, UINT64_MAX));
-
-    get_current_frame().FrameDeletionQueue.flush();
+    VK_CHECK(m_GpuManager.wait_fence(get_current_frame().RenderFence, UINT64_MAX));
 
     const auto res = m_GpuManager.get_next_swapchain_image(get_current_frame().SwapChainSemaphore, UINT64_MAX);
-
     if (!res.has_value()) {
         LOG_ERROR("Failed to acquire swap chain image");
         return false;
     }
 
-    vk::Image swapchain_image = res.value();
-    vk::Extent2D swapchain_extent = m_GpuManager.get_swapchain_extent();
+    const vk::Image swapchain_image = res.value();
+    const vk::Extent2D swapchain_extent = m_GpuManager.get_swapchain_extent();
 
-    VK_CHECK(m_Device.resetFences(1, &get_current_frame().RenderFence));
+    VK_CHECK(m_GpuManager.reset_fence(get_current_frame().RenderFence));
 
     const vk::CommandBuffer& cmd = get_current_frame().CommandBuffer;
     VK_CHECK(cmd.reset());
@@ -325,7 +328,6 @@ bool Engine::draw_frame()
     };
 
     VK_CHECK(m_GpuManager.submit_to_queue(submit_info, get_current_frame().RenderFence));
-
     VK_CHECK(m_GpuManager.present(1, &get_current_frame().RenderSemaphore));
 
     m_FrameNumber++;
@@ -346,7 +348,7 @@ bool Engine::run()
         m_Running = !glfwWindowShouldClose(m_Window);
         // m_Running = false;
     }
-    VK_CHECK(m_Device.waitIdle());
+    VK_CHECK(m_Device.waitIdle()); // TODO remove
     LOG("Engine stopped");
     return true;
 }

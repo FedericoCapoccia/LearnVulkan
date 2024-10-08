@@ -23,7 +23,12 @@ std::expected<vk::Image, vk::Result> GpuManager::get_next_swapchain_image(const 
     return m_CurrentSwapchainImage;
 }
 
-vk::Result GpuManager::present(uint32_t semaphores_count, vk::Semaphore* semaphores)
+vk::Result GpuManager::submit_to_queue(const vk::SubmitInfo2& submit_info2, const vk::Fence render_fence) const
+{
+    return m_GraphicsQueue.Queue.submit2(1, &submit_info2, render_fence);
+}
+
+vk::Result GpuManager::present(const uint32_t semaphores_count, vk::Semaphore* semaphores)
 {
     const vk::PresentInfoKHR present_info {
         semaphores_count,
@@ -40,6 +45,67 @@ vk::Result GpuManager::present(uint32_t semaphores_count, vk::Semaphore* semapho
     }
 
     return res;
+}
+
+std::expected<vk::CommandPool, vk::Result> GpuManager::create_command_pool(const vk::CommandPoolCreateFlags flags)
+{
+    const vk::CommandPoolCreateInfo info { flags, m_GraphicsQueue.FamilyIndex };
+    const auto [res, pool] = m_Device.createCommandPool(info);
+
+    if (res != vk::Result::eSuccess) {
+        return std::unexpected(res);
+    }
+
+    m_CommandPools.push_back(pool);
+    return pool;
+}
+
+std::expected<vk::CommandBuffer, vk::Result> GpuManager::allocate_command_buffer(const vk::CommandPool pool, const vk::CommandBufferLevel level) const
+{
+    const vk::CommandBufferAllocateInfo info { pool, level, 1 };
+    const auto [res, buffer] = m_Device.allocateCommandBuffers(info);
+
+    if (res != vk::Result::eSuccess) {
+        return std::unexpected(res);
+    }
+
+    return buffer[0];
+}
+
+std::expected<vk::Semaphore, vk::Result> GpuManager::create_semaphore(const vk::SemaphoreCreateFlags flags)
+{
+    const vk::SemaphoreCreateInfo info { flags };
+    const auto [res, semaphore] = m_Device.createSemaphore(info);
+
+    if (res != vk::Result::eSuccess) {
+        return std::unexpected(res);
+    }
+
+    m_Semaphores.push_back(semaphore);
+    return semaphore;
+}
+
+std::expected<vk::Fence, vk::Result> GpuManager::create_fence(const vk::FenceCreateFlags flags)
+{
+    const vk::FenceCreateInfo info { flags };
+    const auto [res, fence] = m_Device.createFence(info);
+
+    if (res != vk::Result::eSuccess) {
+        return std::unexpected(res);
+    }
+
+    m_Fences.push_back(fence);
+    return fence;
+}
+
+vk::Result GpuManager::wait_fence(const vk::Fence fence, const uint64_t timeout) const
+{
+    return m_Device.waitForFences(1, &fence, vk::True, timeout);
+}
+
+vk::Result GpuManager::reset_fence(const vk::Fence fence) const
+{
+    return m_Device.resetFences(1, &fence);
 }
 
 ResourcesBundle GpuManager::init(const GpuManagerSpec& spec)
@@ -162,6 +228,7 @@ ResourcesBundle GpuManager::init(const GpuManagerSpec& spec)
         .Format = m_DrawImage.Format
     };
 
+    // TODO remove everything
     return ResourcesBundle {
         m_Device,
         image_bundle
