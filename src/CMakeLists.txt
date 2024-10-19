@@ -17,7 +17,7 @@ target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
         GPUOpen::VulkanMemoryAllocator
 )
 
-target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE)
-target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE)
+target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE )
+target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE __cpp_concepts=202002L)
 
 add_dependencies(${CMAKE_PROJECT_NAME} Shaders)

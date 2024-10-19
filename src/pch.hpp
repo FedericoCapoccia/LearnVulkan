@@ -16,6 +16,8 @@
 #include <fmt/ostream.h>
 
 #include <iostream>
+
+#include <expected>
 #include <deque>
 #include <functional>
 #include <ranges>
